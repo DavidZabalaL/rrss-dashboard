@@ -6,7 +6,7 @@ MARCAS = {'k1': 'Kabat One', 'sym': 'SYM'}
 
 METRICAS = {
     'LinkedIn': [
-        {'key': 'publicaciones',         'label': 'Publicaciones',      'icon': '📝', 'tipo': 'manual'},
+        {'key': 'publicaciones',         'label': 'Publicaciones',      'icon': '📝', 'tipo': 'contenido'},
         {'key': 'incremento_seguidores', 'label': 'Incr. Seguidores',   'icon': '👥', 'tipo': 'archivo'},
         {'key': 'alcance',               'label': 'Alcance',            'icon': '🎯', 'tipo': 'archivo'},
         {'key': 'impresiones',           'label': 'Impresiones',        'icon': '👁️', 'tipo': 'archivo'},
@@ -14,7 +14,7 @@ METRICAS = {
         {'key': 'comentarios',           'label': 'Comentarios',        'icon': '💬', 'tipo': 'archivo'},
     ],
     'Facebook': [
-        {'key': 'publicaciones',         'label': 'Publicaciones',      'icon': '📝', 'tipo': 'manual'},
+        {'key': 'publicaciones',         'label': 'Publicaciones',      'icon': '📝', 'tipo': 'contenido'},
         {'key': 'incremento_seguidores', 'label': 'Incr. Seguidores',   'icon': '👥', 'tipo': 'archivo'},
         {'key': 'visualizaciones',       'label': 'Visualizaciones',    'icon': '🎬', 'tipo': 'archivo'},
         {'key': 'vis_seguidores',        'label': 'Viz. Seguidores',    'icon': '👤', 'tipo': 'manual_50pct'},
@@ -23,7 +23,7 @@ METRICAS = {
         {'key': 'visitas',               'label': 'Visitas',            'icon': '🔗', 'tipo': 'archivo'},
     ],
     'Instagram': [
-        {'key': 'publicaciones',         'label': 'Publicaciones',      'icon': '📝', 'tipo': 'manual'},
+        {'key': 'publicaciones',         'label': 'Publicaciones',      'icon': '📝', 'tipo': 'contenido'},
         {'key': 'incremento_seguidores', 'label': 'Incr. Seguidores',   'icon': '👥', 'tipo': 'archivo'},
         {'key': 'visualizaciones',       'label': 'Visualizaciones',    'icon': '🎬', 'tipo': 'archivo'},
         {'key': 'alcance',               'label': 'Alcance',            'icon': '🎯', 'tipo': 'manual'},

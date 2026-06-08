@@ -232,6 +232,17 @@ def get_contenido_posts(marca, red, año, mes=None):
     return pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
 
 
+def get_publicaciones_count(marca, red, año, mes):
+    """Cuenta posts en contenido_posts para el mes dado."""
+    sql = """
+    SELECT COUNT(*) as total FROM contenido_posts
+    WHERE marca=? AND red=? AND strftime('%Y',fecha)=? AND strftime('%m',fecha)=?
+    """
+    with _conn() as con:
+        row = con.execute(sql, (marca, red, str(año), f"{mes:02d}")).fetchone()
+    return int(row['total']) if row else 0
+
+
 def get_contenido_redes(marca):
     with _conn() as con:
         rows = con.execute(

@@ -6,7 +6,7 @@ import pandas as pd
 from config import METRICAS
 from database import (
     get_metricas_mensuales, get_kpi_objetivos, get_kpi_manual,
-    save_kpi_objetivos_bulk, save_kpi_manuales_bulk,
+    save_kpi_objetivos_bulk, save_kpi_manuales_bulk, get_publicaciones_count,
 )
 from utils import fmt_num, fmt_pct, kpi_status, mes_nombre, gauge_chart
 import sync
@@ -98,9 +98,12 @@ def show_kpis():
         key  = m['key']
         tipo = m['tipo']
 
-        real = (get_kpi_manual(marca_nombre, red, key, año, mes)
-                if tipo in ('manual', 'manual_50pct')
-                else float(reales.get(key, 0) or 0))
+        if tipo == 'contenido':
+            real = float(get_publicaciones_count(marca_nombre, red, año, mes))
+        elif tipo in ('manual', 'manual_50pct'):
+            real = get_kpi_manual(marca_nombre, red, key, año, mes)
+        else:
+            real = float(reales.get(key, 0) or 0)
 
         if tipo == 'auto_4pct':
             meta = round(imp_real * 0.04)
@@ -165,6 +168,12 @@ def show_kpis():
                         f"real_{key}", value=float(val_v or 0),
                         min_value=0.0, step=1.0, label_visibility="collapsed",
                         key=f"real_{key}_{red}_{año}_{mes}",
+                    )
+                elif tipo == 'contenido':
+                    cols[2].markdown(
+                        f"<span style='color:#22c55e;font-size:.85rem;'>"
+                        f"🔢 {fmt_num(md['real'])}</span>",
+                        unsafe_allow_html=True,
                     )
                 else:
                     cols[2].markdown(
