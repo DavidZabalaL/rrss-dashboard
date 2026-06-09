@@ -85,14 +85,46 @@ def parse_facebook(file_obj, metrica_key):
     raise ValueError("No se encontraron columnas Fecha/Primary en el archivo Facebook.")
 
 
+# ── Utilidad: nombres de pestañas ────────────────────────────────────────────
+
+def _excel_engine(file_obj):
+    """Detecta si el archivo es .xls (xlrd) o .xlsx (openpyxl) por magic bytes."""
+    file_obj.seek(0)
+    magic = file_obj.read(4)
+    file_obj.seek(0)
+    return 'xlrd' if magic == b'\xd0\xcf\x11\xe0' else 'openpyxl'
+
+
+def get_excel_sheet_names(file_obj):
+    """Devuelve lista de nombres de hojas sin consumir el file_obj.
+    Soporta tanto .xlsx (openpyxl) como .xls (xlrd)."""
+    file_obj.seek(0)
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(file_obj, read_only=True, data_only=True)
+        names = wb.sheetnames
+        wb.close()
+    except Exception:
+        import xlrd
+        file_obj.seek(0)
+        wb = xlrd.open_workbook(file_contents=file_obj.read())
+        names = wb.sheet_names()
+    file_obj.seek(0)
+    return names
+
+
 # ── LinkedIn métricas ─────────────────────────────────────────────────────────
 
-def parse_linkedin_metricas(file_obj):
+def parse_linkedin_metricas(file_obj, sheet_name=None):
     """
     Export LinkedIn Analytics (alcance / impresiones / reacciones / comentarios).
     Encabezados en fila 1 (skiprows=1). Fechas en formato MM/DD/YYYY → dayfirst=False.
+    Acepta sheet_name para leer una pestaña específica de un archivo multi-hoja.
     """
-    df = pd.read_excel(file_obj, skiprows=1, header=0, engine='openpyxl')
+    kwargs = {'skiprows': 1, 'header': 0, 'engine': _excel_engine(file_obj)}
+    if sheet_name:
+        kwargs['sheet_name'] = sheet_name
+    df = pd.read_excel(file_obj, **kwargs)
     df.columns = [str(c).strip() for c in df.columns]
 
     date_col = _find_col(df, ['fecha', 'date'])
@@ -173,12 +205,18 @@ def parse_instagram(file_obj, metrica_key):
 
 # ── Contenido LinkedIn ────────────────────────────────────────────────────────
 
-def parse_contenido_linkedin(file_obj, marca_nombre, archivo):
+def parse_contenido_linkedin(file_obj, marca_nombre, archivo, sheet_name=None):
     """
     Parsea k1_contenido.xlsx / sym_contenido.xlsx (export LinkedIn Analytics).
     Encabezados en fila 0. Fechas en formato MM/DD/YYYY → dayfirst=False.
+    Acepta sheet_name para leer la pestaña 'Todas las publicaciones' de un export multi-hoja
+    (en ese caso la fila 0 es descripción, los headers están en fila 1 → skiprows=1).
     """
-    df = pd.read_excel(file_obj, header=0, engine='openpyxl')
+    kwargs = {'header': 0, 'engine': _excel_engine(file_obj)}
+    if sheet_name:
+        kwargs['sheet_name'] = sheet_name
+        kwargs['skiprows']   = 1
+    df = pd.read_excel(file_obj, **kwargs)
     df.columns = [str(c).strip() for c in df.columns]
 
     def fc(*kws):

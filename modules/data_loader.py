@@ -5,6 +5,7 @@ from parsers import (
     detect_file, parse_facebook, parse_linkedin_metricas,
     parse_linkedin_seguidores, parse_instagram,
     parse_contenido_linkedin, parse_contenido_facebook, parse_contenido_instagram,
+    get_excel_sheet_names,
 )
 from database import save_metricas_bulk, save_contenido_posts
 import sync
@@ -75,18 +76,30 @@ def _process_files(files, marca_nombre):
                     rows = parse_contenido_linkedin(f, marca, f.name)
                 save_contenido_posts(rows)
                 msg = f"✅ `{f.name}` — {len(rows)} publicaciones guardadas ({info['red']})"
+                # Si el archivo también tiene métricas diarias, procesarlas
+                extras = _linkedin_extra_sheets(f, marca, f.name,
+                                                skip={'contenido'})
+                msg += extras
 
             elif parser == 'linkedin_metricas':
                 rows = parse_linkedin_metricas(f)
                 _tag_rows(rows, marca, info['red'], f.name)
                 save_metricas_bulk(rows)
                 msg = f"✅ `{f.name}` — {len(rows)} registros LinkedIn"
+                # Si el archivo también trae publicaciones o seguidores, procesarlos
+                extras = _linkedin_extra_sheets(f, marca, f.name,
+                                                skip={'metricas'})
+                msg += extras
 
             elif parser == 'linkedin_seguidores':
                 rows = parse_linkedin_seguidores(f)
                 _tag_rows(rows, marca, info['red'], f.name)
                 save_metricas_bulk(rows)
                 msg = f"✅ `{f.name}` — {len(rows)} registros seguidores"
+                # Si el archivo también trae métricas o publicaciones, procesarlos
+                extras = _linkedin_extra_sheets(f, marca, f.name,
+                                                skip={'seguidores'})
+                msg += extras
 
             elif parser == 'facebook':
                 metrica_key = _guess_metrica_facebook(f.name)
@@ -128,6 +141,63 @@ def _tag_rows(rows, marca, red, archivo):
         r.setdefault('marca',   marca)
         r.setdefault('red',     red)
         r.setdefault('archivo', archivo)
+
+
+def _linkedin_extra_sheets(file_obj, marca, archivo, skip):
+    """
+    Lee las pestañas adicionales de un export LinkedIn multi-hoja y procesa
+    las que no fueron el parser principal (controlado por `skip`).
+    Retorna string con mensajes adicionales para concatenar al msg principal.
+    """
+    from database import save_metricas_bulk, save_contenido_posts
+
+    try:
+        sheets = get_excel_sheet_names(file_obj)
+    except Exception:
+        return ''
+
+    extra = ''
+
+    # Pestaña de métricas diarias
+    if 'metricas' not in skip:
+        indicadores = next((s for s in sheets if 'indicador' in s.lower()), None)
+        if indicadores:
+            try:
+                file_obj.seek(0)
+                rows = parse_linkedin_metricas(file_obj, sheet_name=indicadores)
+                _tag_rows(rows, marca, 'LinkedIn', archivo)
+                save_metricas_bulk(rows)
+                extra += f'\n   ↳ Pestaña **{indicadores}**: {len(rows)} registros de métricas'
+            except Exception as e:
+                extra += f'\n   ↳ ⚠️ No se pudo leer **{indicadores}**: {e}'
+
+    # Pestaña de publicaciones individuales
+    if 'contenido' not in skip:
+        publicaciones = next((s for s in sheets if 'publicacion' in s.lower()), None)
+        if publicaciones:
+            try:
+                file_obj.seek(0)
+                rows = parse_contenido_linkedin(file_obj, marca, archivo,
+                                                sheet_name=publicaciones)
+                save_contenido_posts(rows)
+                extra += f'\n   ↳ Pestaña **{publicaciones}**: {len(rows)} publicaciones guardadas'
+            except Exception as e:
+                extra += f'\n   ↳ ⚠️ No se pudo leer **{publicaciones}**: {e}'
+
+    # Pestaña de seguidores
+    if 'seguidores' not in skip:
+        seg_sheet = next((s for s in sheets if 'seguidor' in s.lower()), None)
+        if seg_sheet:
+            try:
+                file_obj.seek(0)
+                rows = parse_linkedin_seguidores(file_obj)
+                _tag_rows(rows, marca, 'LinkedIn', archivo)
+                save_metricas_bulk(rows)
+                extra += f'\n   ↳ Pestaña **{seg_sheet}**: {len(rows)} registros de seguidores'
+            except Exception as e:
+                extra += f'\n   ↳ ⚠️ No se pudo leer **{seg_sheet}**: {e}'
+
+    return extra
 
 
 def _guess_metrica_facebook(filename):
