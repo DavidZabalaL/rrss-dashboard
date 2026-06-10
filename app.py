@@ -311,6 +311,8 @@ if 'marca_activa' not in st.session_state:
     st.session_state.marca_activa = 'k1'
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True
+if 'ai_provider' not in st.session_state:
+    st.session_state.ai_provider = 'gemini'
 
 # Inyectar tema completo (reemplaza el bloque anterior en cada rerun)
 _theme_css = _DARK_CSS if st.session_state.dark_mode else _LIGHT_CSS
@@ -425,18 +427,56 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
+
+    # Selector de motor IA
+    st.markdown(
+        "<div style='color:#5b8db8;font-size:.7rem;font-weight:600;"
+        "text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;'>"
+        "🤖 Motor IA</div>",
+        unsafe_allow_html=True,
+    )
+    _prov_opts  = ['🟢 Gemini (gratis)', '🔷 Claude']
+    _prov_map   = {'🟢 Gemini (gratis)': 'gemini', '🔷 Claude': 'claude'}
+    _prov_rev   = {v: k for k, v in _prov_map.items()}
+    _prov_cur   = _prov_rev.get(st.session_state.ai_provider, '🟢 Gemini (gratis)')
+    _prov_sel   = st.radio(
+        "Motor IA",
+        _prov_opts,
+        index=_prov_opts.index(_prov_cur),
+        label_visibility="collapsed",
+        key="radio_ai_provider",
+    )
+    st.session_state.ai_provider = _prov_map[_prov_sel]
+
+    st.markdown("---")
     import subprocess as _sp
     try:
         _commit = _sp.check_output(['git','rev-parse','--short','HEAD'],
                                    cwd=str(ROOT), text=True).strip()
     except Exception:
         _commit = 'n/a'
+    def _app_load_keys():
+        env_path = ROOT / '.env'
+        if env_path.exists():
+            for _line in env_path.read_text(encoding='utf-8').splitlines():
+                _line = _line.strip()
+                if _line and not _line.startswith('#') and '=' in _line:
+                    _k, _, _v = _line.partition('=')
+                    os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+        try:
+            for _k, _v in st.secrets.items():
+                if isinstance(_v, str):
+                    os.environ.setdefault(_k, _v)
+        except Exception:
+            pass
+    _app_load_keys()
     _api_ok  = bool(os.environ.get('ANTHROPIC_API_KEY','').strip())
-    _api_lbl = '✅ API' if _api_ok else '❌ API'
+    _gem_ok  = bool(os.environ.get('GEMINI_API_KEY','').strip())
+    _api_lbl = ('✅ Claude' if _api_ok else '❌ Claude') + ' · ' + ('✅ Gemini' if _gem_ok else '❌ Gemini')
     st.markdown(
         f"<div style='color:#5b8db8;font-size:.72rem;'>"
         f"👤 {user.get('nombre','—')} · {user.get('role','').title()}<br>"
-        f"<span style='font-family:monospace'>v {_commit} · {_api_lbl}</span></div>",
+        f"<span style='font-family:monospace'>v {_commit}<br>{_api_lbl}</span></div>",
         unsafe_allow_html=True,
     )
     if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):

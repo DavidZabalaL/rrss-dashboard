@@ -40,18 +40,57 @@ def _get_api_key():
     return os.environ.get('ANTHROPIC_API_KEY', '').strip()
 
 
+def _get_gemini_key():
+    _load_env()
+    return os.environ.get('GEMINI_API_KEY', '').strip()
+
+
+def _ai_provider():
+    try:
+        return st.session_state.get('ai_provider', 'gemini')
+    except Exception:
+        return 'gemini'
+
+
 def _stream_analysis(prompt):
-    """Generator: yields text chunks from Claude as they arrive."""
-    import anthropic
-    client = anthropic.Anthropic(api_key=_get_api_key())
-    with client.messages.stream(
-        model='claude-sonnet-4-6',
-        max_tokens=4000,
-        thinking={"type": "adaptive"},
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+    """Generator: yields text chunks from the active AI provider."""
+    if _ai_provider() == 'gemini':
+        import json, urllib.request
+        key = _get_gemini_key()
+        url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+               f'gemini-2.5-flash:streamGenerateContent?alt=sse&key={key}')
+        body = json.dumps({
+            'contents': [{'parts': [{'text': prompt}]}],
+            'generationConfig': {'maxOutputTokens': 8192},
+        }).encode()
+        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, timeout=120)
+        for line in resp:
+            line = line.decode('utf-8').strip()
+            if line.startswith('data: '):
+                data_str = line[6:]
+                if data_str == '[DONE]':
+                    break
+                try:
+                    data = json.loads(data_str)
+                    for cand in data.get('candidates', []):
+                        for part in cand.get('content', {}).get('parts', []):
+                            text = part.get('text', '')
+                            if text:
+                                yield text
+                except Exception:
+                    pass
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_get_api_key())
+        with client.messages.stream(
+            model='claude-sonnet-4-6',
+            max_tokens=4000,
+            thinking={"type": "adaptive"},
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
 
 # ── Data helpers ───────────────────────────────────────────────────────────────
@@ -213,13 +252,15 @@ def show_insights():
     st.markdown("---")
 
     # ── Controles de análisis ──────────────────────────────────────────────────
-    api_key = _get_api_key()
-    api_ok  = bool(api_key)
+    provider = _ai_provider()
+    api_key  = _get_gemini_key() if provider == 'gemini' else _get_api_key()
+    api_ok   = bool(api_key)
+    _prov_lbl = "Gemini" if provider == 'gemini' else "Claude"
 
     col_btn, col_clear = st.columns([3, 1])
     with col_btn:
         analyze = st.button(
-            "🤖  Analizar con Claude",
+            f"🤖  Analizar con {_prov_lbl}",
             type="primary",
             use_container_width=True,
             disabled=not api_ok,
@@ -231,16 +272,15 @@ def show_insights():
             st.rerun()
 
     if not api_ok:
-        st.warning(
-            "Configura `ANTHROPIC_API_KEY` en el archivo `.env` para habilitar el análisis con IA."
-        )
+        _needed = 'GEMINI_API_KEY' if provider == 'gemini' else 'ANTHROPIC_API_KEY'
+        st.warning(f"Configura `{_needed}` en el archivo `.env` para habilitar el análisis con IA.")
         return
 
     # ── Llamada a Claude con streaming ─────────────────────────────────────────
     if analyze:
         st.session_state.pop(analysis_key, None)
 
-        thinking_msg  = st.info("⏳ Claude está analizando los datos… (20-40 segundos)")
+        thinking_msg  = st.info(f"⏳ {_prov_lbl} está analizando los datos… (15-40 segundos)")
         result_holder = st.empty()
         full_text     = ""
 
@@ -257,7 +297,7 @@ def show_insights():
         except Exception as e:
             thinking_msg.empty()
             result_holder.empty()
-            st.error(f"Error al conectar con Claude: {e}")
+            st.error(f"Error al conectar con {_prov_lbl}: {e}")
             return
 
     # ── Mostrar análisis guardado ──────────────────────────────────────────────

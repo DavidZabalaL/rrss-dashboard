@@ -119,6 +119,62 @@ def _get_api_key():
     return os.environ.get('ANTHROPIC_API_KEY', '').strip()
 
 
+def _get_gemini_key():
+    _load_env()
+    return os.environ.get('GEMINI_API_KEY', '').strip()
+
+
+def _call_gemini_raw(prompt):
+    """Calls Gemini generateContent and returns the raw text response."""
+    import urllib.request
+    key = _get_gemini_key()
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}'
+    body = json.dumps({
+        'contents': [{'parts': [{'text': prompt}]}],
+        'generationConfig': {'maxOutputTokens': 8192},
+    }).encode()
+    req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+    resp = urllib.request.urlopen(req, timeout=120)
+    data = json.loads(resp.read())
+    return data['candidates'][0]['content']['parts'][0]['text']
+
+
+def _stream_gemini(prompt):
+    """Generator: yields text chunks from Gemini streaming API."""
+    import urllib.request
+    key = _get_gemini_key()
+    url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+           f'gemini-2.5-flash:streamGenerateContent?alt=sse&key={key}')
+    body = json.dumps({
+        'contents': [{'parts': [{'text': prompt}]}],
+        'generationConfig': {'maxOutputTokens': 8192},
+    }).encode()
+    req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+    resp = urllib.request.urlopen(req, timeout=120)
+    for line in resp:
+        line = line.decode('utf-8').strip()
+        if line.startswith('data: '):
+            data_str = line[6:]
+            if data_str == '[DONE]':
+                break
+            try:
+                data = json.loads(data_str)
+                for cand in data.get('candidates', []):
+                    for part in cand.get('content', {}).get('parts', []):
+                        text = part.get('text', '')
+                        if text:
+                            yield text
+            except Exception:
+                pass
+
+
+def _ai_provider():
+    try:
+        return st.session_state.get('ai_provider', 'gemini')
+    except Exception:
+        return 'gemini'
+
+
 # ── Dates ──────────────────────────────────────────────────────────────────────
 
 def _prev_month(año, mes):
@@ -208,32 +264,35 @@ Tipos: "nacional" | "internacional" | "sector"
 Relevancia: "alta" (conexión directa y obvia) | "media" (conexión genuina pero requiere buen copy)
 Eje: "tecnico" | "empatico"
 """
-    import anthropic
-    client = anthropic.Anthropic(api_key=_get_api_key())
+    provider = _ai_provider()
     try:
-        with client.messages.stream(
-            model='claude-opus-4-8',
-            max_tokens=8000,
-            thinking={"type": "adaptive"},
-            messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            msg = stream.get_final_message()
+        if provider == 'gemini':
+            raw_text = _call_gemini_raw(prompt)
+        else:
+            import anthropic
+            client = anthropic.Anthropic(api_key=_get_api_key())
+            with client.messages.stream(
+                model='claude-opus-4-8',
+                max_tokens=8000,
+                thinking={"type": "adaptive"},
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                msg = stream.get_final_message()
+            raw_text = ""
+            for block in msg.content:
+                if hasattr(block, 'text') and block.text:
+                    raw_text += block.text
     except Exception as e:
-        raise RuntimeError(f"Error al conectar con Claude: {e}") from e
-
-    raw_text = ""
-    for block in msg.content:
-        if hasattr(block, 'text') and block.text:
-            raw_text += block.text
+        raise RuntimeError(f"Error al conectar con la IA ({provider}): {e}") from e
 
     raw_text = raw_text.strip()
     start, end = raw_text.find('['), raw_text.rfind(']') + 1
     if start == -1 or end <= 0:
-        raise ValueError(f"Claude no devolvió JSON válido. Respuesta recibida:\n{raw_text[:500]}")
+        raise ValueError(f"La IA no devolvió JSON válido. Respuesta:\n{raw_text[:500]}")
     try:
         return json.loads(raw_text[start:end])
     except json.JSONDecodeError as e:
-        raise ValueError(f"JSON inválido de Claude: {e}\nFragmento: {raw_text[start:start+300]}") from e
+        raise ValueError(f"JSON inválido: {e}\nFragmento: {raw_text[start:start+300]}") from e
 
 
 # ── Calendar Rendering ─────────────────────────────────────────────────────────
@@ -630,6 +689,8 @@ Responde SOLO con JSON válido, sin texto antes ni después:
 # ── Claude Calls ───────────────────────────────────────────────────────────────
 
 def _call_claude_json(prompt):
+    if _ai_provider() == 'gemini':
+        return _call_gemini_raw(prompt)
     import anthropic
     client = anthropic.Anthropic(api_key=_get_api_key())
     with client.messages.stream(
@@ -655,23 +716,31 @@ def _parse_json(text):
 
 def _call_adjustment(prompt):
     """Returns (descripcion_cambios, parrilla_json_list)."""
-    import anthropic
-    client = anthropic.Anthropic(api_key=_get_api_key())
-
+    provider    = _ai_provider()
     placeholder = st.empty()
     full_text   = ""
-    thinking_ph = st.info("⏳ Claude está ajustando la parrilla…")
+    lbl         = "Gemini" if provider == 'gemini' else "Claude"
+    thinking_ph = st.info(f"⏳ {lbl} está ajustando la parrilla…")
 
-    with client.messages.stream(
-        model='claude-sonnet-4-6',
-        max_tokens=8000,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for chunk in stream.text_stream:
+    if provider == 'gemini':
+        for chunk in _stream_gemini(prompt):
             if not full_text:
                 thinking_ph.empty()
             full_text += chunk
             placeholder.markdown(full_text + "▌")
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_get_api_key())
+        with client.messages.stream(
+            model='claude-sonnet-4-6',
+            max_tokens=8000,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for chunk in stream.text_stream:
+                if not full_text:
+                    thinking_ph.empty()
+                full_text += chunk
+                placeholder.markdown(full_text + "▌")
 
     placeholder.empty()
 
@@ -1358,7 +1427,8 @@ def show_parrilla():
                 special_dates_selected, ai_insights, raw_ctx,
             )
 
-            st.write("Llamando a Claude Opus (30-60 segundos)…")
+            _lbl = "Gemini 2.5 Flash" if _ai_provider() == 'gemini' else "Claude Sonnet"
+            st.write(f"Llamando a {_lbl} (20-60 segundos)…")
             try:
                 raw   = _call_claude_json(prompt)
                 posts = _parse_json(raw)
@@ -1826,9 +1896,11 @@ def show_parrilla():
             "en **DALL-E 3 (ChatGPT)** y **Gemini Imagen** (Google)."
         )
 
-        api_key_img = _get_api_key()
-        if not api_key_img:
-            st.warning("Configura `ANTHROPIC_API_KEY` para usar este módulo.")
+        _prov_img = _ai_provider()
+        _key_img_ok = _get_gemini_key() if _prov_img == 'gemini' else _get_api_key()
+        if not _key_img_ok:
+            _needed = 'GEMINI_API_KEY' if _prov_img == 'gemini' else 'ANTHROPIC_API_KEY'
+            st.warning(f"Configura `{_needed}` en `.env` para usar este módulo.")
         else:
             # Selector de publicación
             opciones = []
@@ -1864,9 +1936,10 @@ def show_parrilla():
                     _img_error_ph.empty()
 
                     prompt_req = _build_image_prompt_request(sel_row, brand, red_img)
+                    _ai_lbl_img = "Gemini" if _ai_provider() == 'gemini' else "Claude"
                     _spin_ph = st.empty()
                     with _spin_ph:
-                        with st.spinner("Claude está creando los prompts… (10-20 seg)"):
+                        with st.spinner(f"{_ai_lbl_img} está creando los prompts… (10-20 seg)"):
                             try:
                                 raw = _call_claude_json(prompt_req)
                                 result = _parse_json(raw)
@@ -1878,8 +1951,8 @@ def show_parrilla():
                                 if 'credit' in err_msg.lower() or 'balance' in err_msg.lower():
                                     _img_error_ph.error(
                                         "❌ Saldo insuficiente en Anthropic. "
-                                        "Agrega créditos en [console.anthropic.com](https://console.anthropic.com) "
-                                        "→ Billing."
+                                        "Cambia a Gemini (gratis) en el sidebar, o agrega créditos en "
+                                        "[console.anthropic.com](https://console.anthropic.com)."
                                     )
                                 else:
                                     _img_error_ph.error(f"Error al generar: {err_msg}")

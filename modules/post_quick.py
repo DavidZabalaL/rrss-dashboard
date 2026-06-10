@@ -41,6 +41,18 @@ def _get_api_key():
     return os.environ.get('ANTHROPIC_API_KEY', '').strip()
 
 
+def _get_gemini_key():
+    _load_env()
+    return os.environ.get('GEMINI_API_KEY', '').strip()
+
+
+def _ai_provider():
+    try:
+        return st.session_state.get('ai_provider', 'gemini')
+    except Exception:
+        return 'gemini'
+
+
 def _load_brand(brand_id):
     p = ROOT / 'marca' / brand_id / 'brand.json'
     return json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
@@ -109,15 +121,42 @@ Responde en español. Sé directo y concreto — nada de copy genérico o corpor
 
 
 def _stream_quick_post(prompt):
-    import anthropic
-    client = anthropic.Anthropic(api_key=_get_api_key())
-    with client.messages.stream(
-        model='claude-sonnet-4-6',
-        max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+    if _ai_provider() == 'gemini':
+        import json, urllib.request
+        key = _get_gemini_key()
+        url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+               f'gemini-2.5-flash:streamGenerateContent?alt=sse&key={key}')
+        body = json.dumps({
+            'contents': [{'parts': [{'text': prompt}]}],
+            'generationConfig': {'maxOutputTokens': 4096},
+        }).encode()
+        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, timeout=120)
+        for line in resp:
+            line = line.decode('utf-8').strip()
+            if line.startswith('data: '):
+                data_str = line[6:]
+                if data_str == '[DONE]':
+                    break
+                try:
+                    data = json.loads(data_str)
+                    for cand in data.get('candidates', []):
+                        for part in cand.get('content', {}).get('parts', []):
+                            text = part.get('text', '')
+                            if text:
+                                yield text
+                except Exception:
+                    pass
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_get_api_key())
+        with client.messages.stream(
+            model='claude-sonnet-4-6',
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
 
 def show_post_quick():
@@ -134,9 +173,11 @@ def show_post_quick():
         st.error("No se encontró el brief de la marca.")
         return
 
-    api_key = _get_api_key()
+    provider = _ai_provider()
+    api_key  = _get_gemini_key() if provider == 'gemini' else _get_api_key()
     if not api_key:
-        st.warning("Configura `ANTHROPIC_API_KEY` en el archivo `.env` para usar este módulo.")
+        _needed = 'GEMINI_API_KEY' if provider == 'gemini' else 'ANTHROPIC_API_KEY'
+        st.warning(f"Configura `{_needed}` en el archivo `.env` para usar este módulo.")
         return
 
     st.markdown(f"**Marca activa:** {brand.get('label', '')}  ·  cambia con los botones del sidebar.")
@@ -184,8 +225,9 @@ def show_post_quick():
 
     # ── Botón generar ──────────────────────────────────────────────────────────
     can_generate = bool(tema.strip())
+    _prov_lbl = "Gemini" if _ai_provider() == 'gemini' else "Claude"
     gen_btn = st.button(
-        "✨  Generar Post con IA",
+        f"✨  Generar Post con {_prov_lbl}",
         type="primary",
         use_container_width=True,
         disabled=not can_generate,
@@ -208,7 +250,8 @@ def show_post_quick():
         st.session_state.pop(result_key, None)
         prompt = _build_quick_prompt(brand, tipo_ctx, tema.strip(), contexto_extra, redes)
 
-        thinking_ph   = st.info("⏳ Claude está creando el post… (15-30 segundos)")
+        _prov_lbl2    = "Gemini" if _ai_provider() == 'gemini' else "Claude"
+        thinking_ph   = st.info(f"⏳ {_prov_lbl2} está creando el post… (10-30 segundos)")
         result_holder = st.empty()
         full_text     = ""
 
