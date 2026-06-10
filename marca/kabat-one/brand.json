@@ -1,0 +1,98 @@
+{
+  "brand_id": "kabat-one",
+  "label": "Kabat One",
+  "tagline": "Una plataforma. Seguridad Total.",
+  "logos": {
+    "color": "logos/color.png",
+    "white": "logos/white.png",
+    "_note": "color.png para fondos claros. white.png para fondos oscuros."
+  },
+  "colors": {
+    "primary": "#00A1FF",
+    "secondary": "#24326A",
+    "accent": "#31D8FF",
+    "background_light": "#FFFFFF",
+    "background_dark": "#060E40",
+    "text_on_light": "#1A1A1A",
+    "text_on_dark": "#FFFFFF"
+  },
+  "typography": {
+    "heading_font": "Space Grotesk Black",
+    "body_font": "Space Grotesk Regular"
+  },
+  "tone": {
+    "adjectives": ["Tecnológico", "Innovador", "Liderazgo"],
+    "style": "Lenguaje confiado y seguro, que transmite autoridad, innovación, seguridad y liderazgo en el sector.",
+    "avoid": ["Lenguaje genérico, poco claro, que no aporte valor. No utilizar contracciones ni modismos."]
+  },
+  "key_messages": [
+    "Conectividad: Centraliza todos tus sistemas en un solo lugar y te permite comunicarte con múltiples agencias para optimizar la atención a emergencias.",
+    "Integración: Kabat One integra cámaras, sensores, sistemas de comunicación y bases de datos en una única plataforma operativa. El operador no cambia de pantalla. No pierde información. Decide en segundos.",
+    "Innovación: Soluciones de vanguardia que se adaptan a tus necesidades."
+  ],
+  "audience": "Sector público, Gobernadores, alcaldes, presidentes municipales, secretarios de seguridad, altos funcionarios de gobierno.",
+  "social_handles": {
+    "instagram": "@kabat.one",
+    "facebook": "Kabat One",
+    "linkedin": "Kabat One",
+    "website": "www.kabatone.com"
+  },
+  "rrss": {
+    "pilares": [
+      {
+        "id": "posicionamiento",
+        "label": "Posicionamiento",
+        "descripcion": "Comunicar liderazgo, autoridad y presencia de Kabat One en el sector de seguridad pública. Logros, reconocimientos, proyectos destacados."
+      },
+      {
+        "id": "educacion_tecnica",
+        "label": "Educación Técnica",
+        "descripcion": "Explicar capacidades tecnológicas de la plataforma: IA, reconocimiento facial, LPR, integración de sistemas, C4/C5. Contenido que educa al tomador de decisión."
+      },
+      {
+        "id": "casos_de_uso",
+        "label": "Casos de Uso",
+        "descripcion": "Mostrar cómo Kabat One resuelve problemas reales de seguridad en municipios, estados y eventos. Escenarios concretos de operación."
+      },
+      {
+        "id": "como_ayuda",
+        "label": "Cómo Ayuda Nuestra Plataforma",
+        "descripcion": "Beneficios directos para el operador y el tomador de decisión. Qué cambia en su operación diaria al usar Kabat One. Menos riesgo, más control, decisiones más rápidas."
+      }
+    ],
+    "frecuencia": {
+      "dias_publicacion": ["lunes", "miércoles"],
+      "publicaciones_semana": 2,
+      "redes_activas": ["LinkedIn", "Facebook", "Instagram"]
+    },
+    "formatos": ["Imagen estática / Infografía", "Carrusel"],
+    "hashtags": {
+      "marca": ["#KabatOne", "#UnaPlataformaSeguridad"],
+      "sector": ["#SeguridadPública", "#SeguridadInteligente", "#TecnologíaDeSeguridadMéxico"],
+      "producto": ["#C4", "#C5", "#ReconocimientoFacial", "#LPR", "#ControlDeVelocidad", "#VideoAnalítica"],
+      "industria": ["#GobiernoDigital", "#CiudadSegura", "#InnovaciónGubernamental", "#SeguridadMunicipal"]
+    },
+    "cta_opciones": [
+      "Conoce más en www.kabatone.com",
+      "Agenda una demo: www.kabatone.com/contacto",
+      "¿Quieres saber cómo funciona? Escríbenos.",
+      "Descubre todo lo que Kabat One puede hacer por tu ciudad."
+    ]
+  },
+  "templates": {
+    "hoja-membretada": {
+      "path": "templates/hoja-membretada/",
+      "format": "docx",
+      "file": "template.docx",
+      "use_when": "Ebooks, articulos, comunicados de prensa, propuestas técnicas, cotizaciones, cartas de presentación de producto dirigidas a tomadores de decisión en seguridad pública.",
+      "notes": ""
+    },
+    "presentacion": {
+      "path": "templates/presentacion/",
+      "format": "pptx",
+      "file": "template.pptx",
+      "use_when": "Propuestas técnicas, presentaciones de producto, Demos de producto, presentaciones de plataforma, pitches técnicos a operadores o directores de seguridad.",
+      "notes": ""
+    }
+  }
+}

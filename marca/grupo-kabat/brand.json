@@ -1,0 +1,61 @@
+{
+  "brand_id": "grupo-kabat",
+  "label": "Grupo Kabat",
+  "tagline": "Seguridad que salva vidas",
+  "logos": {
+    "color": "logos/color.png",
+    "white": "logos/white.png",
+    "_note": "color.png para fondos claros. white.png para fondos oscuros."
+  },
+  "colors": {
+    "primary": "#213667",
+    "secondary": "#0098D6",
+    "accent": "#11172D",
+    "background_light": "#FFFFFF",
+    "background_dark": "#0D1B2A",
+    "text_on_light": "#1A1A1A",
+    "text_on_dark": "#FFFFFF"
+  },
+  "typography": {
+    "heading_font": "Open Sans Bold",
+    "body_font": "Open Sans Light"
+  },
+  "tone": {
+    "adjectives": [
+      "institucional",
+      "confiable",
+      "vanguardia"
+    ],
+    "style": "Formal, corporativo pero cercano, habla de experiencia, innovación y responsabilidad por salvar vidas.",
+    "avoid": [
+      "lenguaje demasiado técnico",
+      "informalidad excesiva",
+      "jerga excesiva"
+    ]
+  },
+  "key_messages": [
+    "Grupo Kabat, con más de 20 años en la industria, nació con la convicción de salvar vidas. Hoy, a través de Kabat One y SYM Servicios Integrales, acompañamos a gobiernos y organizaciones en cada etapa: desde la visión estratégica de seguridad hasta el tornillo que mantiene todo seguro y en operación.",
+    "Lo que hacemos: Grupo Kabat es el partner integral de seguridad pública en México. Diseñamos sistemas inteligentes, los implementamos correctamente y los mantenemos operativos sin interrupciones. 50+ proyectos implementados en gobiernos municipales y estatales. 99.8% de disponibilidad operativa en centros C4/C5.",
+    "Diferencial: Experiencia en proyectos federales, estatales y municipales. Más de 20 años en la industria. Certificaciones internacionales ISO."
+  ],
+  "audience": "Altos cargos de gobierno, secretarios de seguridad, c-levels corporativos, altos perfiles directivos, profesionales de la industria.",
+  "social_handles": {
+    "linkedin": "Grupo Kabat"
+  },
+  "templates": {
+    "hoja-membretada": {
+      "path": "templates/hoja-membretada/",
+      "format": "docx",
+      "file": "template.docx",
+      "use_when": "Ebooks, articulos, comunicados de prensa, cartas formales, propuestas ejecutivas, comunicados institucionales dirigidos a socios, directivos o clientes corporativos.",
+      "notes": ""
+    },
+    "presentacion": {
+      "path": "templates/presentacion/",
+      "format": "pptx",
+      "file": "template.pptx",
+      "use_when": "Presentaciones corporativas, pitches a gobierno, decks de posicionamiento de Grupo Kabat.",
+      "notes": ""
+    }
+  }
+}

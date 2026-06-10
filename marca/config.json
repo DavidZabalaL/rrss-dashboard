@@ -1,0 +1,22 @@
+{
+  "_comment": "Índice global de marcas. Los skills leen este archivo primero para resolver qué brand.json cargar.",
+  "default_brand": "grupo-kabat",
+  "brands": {
+    "grupo-kabat": {
+      "label": "Grupo Kabat",
+      "path": "grupo-kabat/brand.json",
+      "aliases": ["kabat", "grupo kabat", "Grupo Kabat"]
+    },
+    "kabat-one": {
+      "label": "Kabat One",
+      "path": "kabat-one/brand.json",
+      "aliases": ["kabat one", "Kabat One", "k1"]
+    },
+    "sym-servicios": {
+      "label": "SYM Servicios Integrales",
+      "path": "sym-servicios/brand.json",
+      "aliases": ["sym", "SYM", "servicios integrales", "SYM Servicios"]
+    }
+  },
+  "_logo_rule": "Si el fondo es oscuro usa logos/<brand>/white.png. Si el fondo es claro usa logos/<brand>/color.png."
+}

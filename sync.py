@@ -37,13 +37,24 @@ def pull():
     if not token or not repo:
         return False
     url  = f"https://api.github.com/repos/{repo}/contents/{path}"
-    resp = requests.get(url, headers=_headers(token), timeout=15)
-    if resp.status_code == 200:
-        content = base64.b64decode(resp.json()["content"])
-        DB_PATH.parent.mkdir(exist_ok=True)
-        DB_PATH.write_bytes(content)
-        return True
-    return False
+    resp = requests.get(url, headers=_headers(token), timeout=30, stream=True)
+    if resp.status_code != 200:
+        return False
+    data = resp.json()
+    # GitHub Contents API tiene límite de ~1 MB; archivos más grandes
+    # devuelven content vacío pero incluyen download_url para descarga directa.
+    raw_content = data.get("content", "").replace("\n", "")
+    if raw_content:
+        content = base64.b64decode(raw_content)
+    elif data.get("download_url"):
+        dl = requests.get(data["download_url"], timeout=60, stream=True)
+        dl.raise_for_status()
+        content = b"".join(dl.iter_content(chunk_size=65536))
+    else:
+        return False
+    DB_PATH.parent.mkdir(exist_ok=True)
+    DB_PATH.write_bytes(content)
+    return True
 
 
 def push():

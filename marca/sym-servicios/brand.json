@@ -1,0 +1,99 @@
+{
+  "brand_id": "sym-servicios",
+  "label": "SYM Servicios Integrales",
+  "tagline": "Innovación tecnológica para una seguridad inteligente.",
+  "logos": {
+    "color": "logos/color.png",
+    "white": "logos/white.png",
+    "_note": "color.png para fondos claros. white.png para fondos oscuros."
+  },
+  "colors": {
+    "primary": "#4393ce",
+    "secondary": "#263565",
+    "tertiary": "#00aee0",
+    "accent": "#87e856",
+    "background_light": "#FFFFFF",
+    "background_dark": "#0D1E36",
+    "text_on_light": "#1A1A1A",
+    "text_on_dark": "#FFFFFF"
+  },
+  "typography": {
+    "heading_font": "Century Gothic Bold",
+    "body_font": "Century Gothic Regular"
+  },
+  "tone": {
+    "adjectives": ["Profesional", "Innovador", "Seguro"],
+    "style": "Directo y profesional, enfocado en soluciones concretas, innovadoras y adaptables a diferentes necesidades.",
+    "avoid": ["Lenguaje poco claro, genérico, que no aporte valor, contracciones o modismos."]
+  },
+  "key_messages": [
+    "Infraestructura de Vanguardia: Implementamos tecnología de última generación que garantiza continuidad operativa, seguridad y rendimiento en cada situación.",
+    "Flexibilidad y Escalabilidad: Nuestras soluciones crecen con sus necesidades, adaptándose a nuevas tecnologías sin reemplazar su inversión existente.",
+    "Experiencia Internacional: Nuestra experiencia en diferentes países nos ha permitido desarrollar las mejores prácticas y estándares globales."
+  ],
+  "audience": "Sector público, Gobernadores, alcaldes, presidentes municipales, secretarios de seguridad, altos funcionarios de gobierno.",
+  "social_handles": {
+    "instagram": "@SYM_Servicios_Integrales",
+    "facebook": "SYM Servicios Integrales",
+    "linkedin": "SYM Servicios Integrales",
+    "website": "www.symservicios.com"
+  },
+  "rrss": {
+    "pilares": [
+      {
+        "id": "posicionamiento",
+        "label": "Posicionamiento",
+        "descripcion": "Comunicar liderazgo, experiencia internacional y presencia de SYM en el sector. Proyectos destacados, trayectoria, reconocimientos."
+      },
+      {
+        "id": "educacion_tecnica",
+        "label": "Educación Técnica",
+        "descripcion": "Explicar soluciones tecnológicas: infraestructura de seguridad, cableado estructurado, CCTV, control de acceso, centros de comando. Contenido que educa sobre la tecnología que implementa SYM."
+      },
+      {
+        "id": "casos_de_uso",
+        "label": "Casos de Uso",
+        "descripcion": "Mostrar cómo SYM resuelve retos reales de seguridad e infraestructura en proyectos públicos y privados. Ejemplos concretos de implementación."
+      },
+      {
+        "id": "como_ayuda",
+        "label": "Cómo Ayuda Nuestra Solución",
+        "descripcion": "Beneficios tangibles para el cliente: continuidad operativa, escalabilidad, reducción de riesgos. Qué cambia en su operación al confiar en SYM."
+      }
+    ],
+    "frecuencia": {
+      "dias_publicacion": ["martes", "jueves"],
+      "publicaciones_semana": 2,
+      "redes_activas": ["LinkedIn", "Facebook", "Instagram"]
+    },
+    "formatos": ["Imagen estática / Infografía", "Carrusel"],
+    "hashtags": {
+      "marca": ["#SYMServicios", "#InnovaciónTecnológicaSeguridadInteligente"],
+      "sector": ["#SeguridadPública", "#SeguridadInteligente", "#TecnologíaDeSeguridadMéxico"],
+      "producto": ["#InfraestructuraDeSeguridad", "#CentrosDeComando", "#CCTV", "#ControlDeAcceso", "#CableadoEstructurado"],
+      "industria": ["#SeguridadIntegral", "#CiudadSegura", "#GobiernoDigital", "#ExperienciaInternacional"]
+    },
+    "cta_opciones": [
+      "Conoce más en www.symservicios.com",
+      "Contáctanos y diseñamos la solución para tu proyecto.",
+      "¿Tienes un proyecto de seguridad? Hablemos.",
+      "Más de 20 años implementando seguridad en México y el mundo."
+    ]
+  },
+  "templates": {
+    "hoja-membretada": {
+      "path": "templates/hoja-membretada/",
+      "format": "docx",
+      "file": "template.docx",
+      "use_when": "Ebooks, articulos, comunicados de prensa, cartas formales, propuestas de servicios, comunicados dirigidos a clientes del sector público.",
+      "notes": ""
+    },
+    "presentacion": {
+      "path": "templates/presentacion/",
+      "format": "pptx",
+      "file": "template.pptx",
+      "use_when": "Presentaciones de servicios, demostraciones de soluciones integrales, propuestas técnico-comerciales.",
+      "notes": ""
+    }
+  }
+}

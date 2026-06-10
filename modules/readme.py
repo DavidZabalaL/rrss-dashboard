@@ -15,12 +15,11 @@ def show_readme():
 
     st.markdown("---")
 
-    # ── Índice rápido ──────────────────────────────────────────────────────────
     st.markdown("""
-    > **Contenido de esta guía:**
-    > [¿Qué es esta plataforma?](#1) · [Navegación y filtros](#2) · [Importar datos](#3) ·
-    > [Monitor de KPIs](#4) · [Dashboard](#5) · [Analista de Contenido](#6) ·
-    > [Insights para IA](#7) · [Nomenclatura de archivos](#8) · [Métricas especiales](#9)
+> **Contenido de esta guía:**
+> [¿Qué es esta plataforma?](#1) · [Navegación y filtros](#2) · [Importar datos](#3) ·
+> [Monitor de KPIs](#4) · [Dashboard](#5) · [Analista de Contenido](#6) ·
+> [Insights con IA](#7) · [Parrilla de Contenido](#8) · [Nomenclatura de archivos](#9) · [Métricas especiales](#10)
     """)
 
     st.markdown("---")
@@ -30,10 +29,10 @@ def show_readme():
     # ══════════════════════════════════════════════════════════════════════════
     with st.expander("1 · ¿Qué es esta plataforma?", expanded=True):
         st.markdown("""
-**RRSS Analytics** es un dashboard privado de análisis de redes sociales diseñado para
+**RRSS Analytics** es un dashboard privado de análisis y planificación de redes sociales diseñado para
 **Kabat One** y **SYM**. Centraliza en un solo lugar los datos exportados de LinkedIn,
 Facebook e Instagram, permite registrar y monitorear KPIs mensuales, visualizar tendencias
-históricas y generar scripts listos para analizar con inteligencia artificial.
+históricas y generar contenido mensual asistido por inteligencia artificial.
 
 **Lo que puedes hacer:**
 - Importar los archivos Excel descargados directamente de Meta y LinkedIn
@@ -41,7 +40,8 @@ históricas y generar scripts listos para analizar con inteligencia artificial.
 - Ver el cumplimiento de KPIs con indicadores visuales
 - Comparar el rendimiento mes a mes con gráficas históricas
 - Analizar el desempeño de publicaciones individuales
-- Generar un prompt completo listo para pegar en Claude o Gemini y obtener análisis y recomendaciones
+- **Generar análisis estratégico con Claude directamente en la plataforma**
+- **Crear la parrilla de contenido mensual con IA**, basada en los datos reales de rendimiento
 
 **Marcas disponibles:** Kabat One (`k1_`) · SYM (`sym_`)
 
@@ -68,7 +68,7 @@ históricas y generar scripts listos para analizar con inteligencia artificial.
 
 ### Barra de filtros superior
 
-Todos los módulos respetan el mismo filtro global que aparece en la parte superior:
+Todos los módulos respetan el mismo filtro global:
 
 | Filtro | Descripción |
 |---|---|
@@ -79,11 +79,7 @@ Todos los módulos respetan el mismo filtro global que aparece en la parte super
 Al entrar por primera vez, los filtros se posicionan automáticamente en el **último mes
 con datos disponibles** para la marca y red activas.
 
-Al cambiar de marca (Kabat One ↔ SYM) los filtros se reinician para evitar ver datos
-cruzados.
-
-El botón **📁 Importar Datos** en la esquina superior derecha lleva directamente a la
-sección de carga sin perder los filtros.
+Al cambiar de marca (Kabat One ↔ SYM) los filtros se reinician para evitar ver datos cruzados.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -110,26 +106,16 @@ automáticamente por el prefijo del nombre (`k1_` o `sym_`).
 {marca}_contenido_{red}.xlsx        ← publicaciones para análisis
 ```
 
-| Prefijo | Marca |
-|---|---|
-| `k1_` | Kabat One |
-| `sym_` | SYM |
-
 **Ejemplos — métricas diarias:**
 ```
 k1_linkedin_impresiones.xlsx
-k1_linkedin_incremento_seguidores.xlsx
 k1_facebook_visualizaciones.xlsx
-k1_instagram_visitas.xlsx
-sym_linkedin_impresiones.xlsx
 sym_instagram_interaccion.xlsx
 ```
 
 **Ejemplos — contenido (publicaciones):**
 ```
 k1_contenido_linkedin.xlsx
-k1_contenido_facebook.xlsx
-sym_contenido_linkedin.xlsx
 sym_contenido_facebook.xlsx
 ```
 
@@ -137,8 +123,7 @@ sym_contenido_facebook.xlsx
 
 ### Comportamiento al reimportar
 
-- Los datos se **actualizan por día**: si ya existe un registro para esa fecha y métrica,
-  se sobreescribe con el nuevo valor
+- Los datos se **actualizan por día**: si ya existe un registro para esa fecha y métrica, se sobreescribe
 - Los meses que **no están en el archivo nuevo no se tocan** — el historial se preserva
 - Puedes subir el mismo archivo varias veces sin duplicar datos
 
@@ -146,10 +131,7 @@ sym_contenido_facebook.xlsx
 
 ### Formato de los archivos
 
-Los archivos deben ser los **exports directos de Meta o LinkedIn** sin modificar.
-El sistema detecta el formato automáticamente.
-
-| Tipo | Estructura esperada del Excel |
+| Tipo | Estructura esperada |
 |---|---|
 | **LinkedIn métricas** | Fila 1: título · Fila 2: encabezados · Fila 3+: datos diarios |
 | **LinkedIn contenido** | Fila 1: encabezados · una fila por publicación |
@@ -165,18 +147,6 @@ El sistema detecta el formato automáticamente.
 Esta es la sección principal. Muestra y permite registrar metas y valores reales
 por red social y mes.
 
-### Columnas del formulario
-
-| Columna | Descripción |
-|---|---|
-| **Métrica** | Nombre del indicador |
-| **Meta del mes** | El objetivo que quieres alcanzar ese mes |
-| **Real** | El valor real obtenido |
-| **Cumpl.** | Porcentaje de cumplimiento (Real ÷ Meta) |
-| **Tipo** | Cómo se obtiene el dato (ver tabla abajo) |
-
----
-
 ### Tipos de métrica
 
 | Tipo | Significado |
@@ -184,9 +154,7 @@ por red social y mes.
 | `archivo` | El valor real se importa automáticamente desde el Excel |
 | `manual` | Debes escribir el valor real en el formulario cada mes |
 | `auto_4pct` | La meta se calcula sola como el 4% de las impresiones del mes |
-| `manual_50pct` | La meta se calcula como el 50% de las visualizaciones; el real se captura a mano |
-
----
+| `manual_50pct` | La meta = 50% de visualizaciones; el real se captura a mano |
 
 ### Indicadores de cumplimiento
 
@@ -196,18 +164,12 @@ por red social y mes.
 | 🟡 Amarillo | Entre 75% y 99% |
 | 🔴 Rojo | Menos del 75% |
 
----
-
 ### ¿Cómo registrar KPIs?
 
 1. Selecciona la **red social**, **año** y **mes** en los filtros superiores
 2. Escribe las **metas** en los campos editables
 3. Para métricas `manual`, escribe también el **valor real**
 4. Haz clic en **💾 Guardar KPIs**
-5. Los indicadores y gauges se actualizan automáticamente
-
-Las métricas `archivo` muestran el real en gris — ese valor viene del archivo importado
-y no es editable desde aquí.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -215,32 +177,14 @@ y no es editable desde aquí.
     # ══════════════════════════════════════════════════════════════════════════
     with st.expander("5 · Dashboard"):
         st.markdown("""
-El Dashboard ofrece una vista visual del rendimiento del mes seleccionado y la
-evolución histórica.
+El Dashboard ofrece una vista visual del rendimiento del mes seleccionado y la evolución histórica.
 
-### Tarjetas de KPI
+- **Tarjetas de KPI** — valor real, variación vs. mes anterior, color por cumplimiento
+- **Tendencia histórica** — gráfica de líneas con evolución mensual
+- **Comparativa mes a mes** — barras agrupadas con los últimos 6 meses
+- **Tabla de cumplimiento** — resumen de Real, Meta y % para todas las métricas
 
-Muestra las 4 métricas principales del mes con:
-- Valor real del mes
-- Variación respecto al mes anterior (▲ sube / ▼ baja)
-- Color según cumplimiento de meta
-
-### Tendencia histórica
-
-Gráfica de líneas con la evolución mensual de las métricas que elijas.
-Puedes seleccionar qué métricas visualizar con el selector múltiple.
-
-### Comparativa mes a mes
-
-Gráfica de barras agrupadas con los últimos 6 meses. Útil para identificar
-patrones estacionales o el impacto de acciones concretas.
-
-### Tabla de cumplimiento
-
-Resumen tabular con Real, Meta y % de cumplimiento para todas las métricas
-del mes filtrado.
-
-> **Nota:** Si el Dashboard aparece vacío, verifica que hayas importado datos
+> Si el Dashboard aparece vacío, verifica que hayas importado datos
 > para la red y mes seleccionados en los filtros.
         """)
 
@@ -254,156 +198,235 @@ Requiere haber importado el archivo de contenido correspondiente.
 
 ### ¿Qué muestra?
 
-- Tabla con todas las publicaciones del mes (o del período completo)
+- Tabla con todas las publicaciones del período
 - Ordenadas por tasa de interacción o impresiones
 - Top publicaciones vs. publicaciones de menor rendimiento
 - Desglose por tipo de contenido (imagen, video, carrusel, etc.)
 
----
+### Archivos de contenido
 
-### Archivos de contenido — LinkedIn
-
-| Archivo | Descripción |
+| Archivo | Red |
 |---|---|
-| `k1_contenido_linkedin.xlsx` | Publicaciones LinkedIn Kabat One |
-| `sym_contenido_linkedin.xlsx` | Publicaciones LinkedIn SYM |
+| `k1_contenido_linkedin.xlsx` | LinkedIn Kabat One |
+| `k1_contenido_facebook.xlsx` | Facebook Kabat One |
+| `k1_contenido_instagram.xlsx` | Instagram Kabat One |
+| `sym_contenido_linkedin.xlsx` | LinkedIn SYM |
+| `sym_contenido_facebook.xlsx` | Facebook SYM |
+| `sym_contenido_instagram.xlsx` | Instagram SYM |
 
-Es el export de **LinkedIn Analytics → Análisis → Publicaciones → Exportar**.
-Contiene una fila por post con métricas individuales.
-
-**Columnas que reconoce el sistema:**
-
-| Columna | Aliases aceptados |
-|---|---|
-| Fecha | Fecha de creación · Date |
-| Título / Copy | Título · Title · Copy · Caption |
-| Tipo | Tipo de publicación · Formato |
-| Impresiones | Impresiones · Impressions |
-| Reacciones | Recomendaciones · Likes · Reactions |
-| Comentarios | Comentarios · Comments |
-| Compartidos | Veces compartido · Shares · Reposts |
-| Tasa de interacción | Tasa de interacción · Engagement rate |
-
----
-
-### Archivos de contenido — Facebook
-
-| Archivo | Descripción |
-|---|---|
-| `k1_contenido_facebook.xlsx` | Publicaciones Facebook Kabat One |
-| `sym_contenido_facebook.xlsx` | Publicaciones Facebook SYM |
-
-Es el export de **Meta Business Suite → Publicaciones → Exportar datos**.
-
-**Cómo descargarlo:**
-1. Ve a [business.facebook.com](https://business.facebook.com) → tu página
-2. Menú izquierdo → **Publicaciones**
-3. Selecciona el rango de fechas deseado
-4. Clic en **Exportar datos** → descarga el archivo `.csv`
-5. Renómbralo como `k1_contenido_facebook.xlsx` (o `sym_contenido_facebook.xlsx`)
-6. Si el archivo descargado es `.csv`, ábrelo en Excel → Guardar como `.xlsx`
-
-**Columnas que reconoce el sistema:**
-
-| Columna del export | Métrica guardada |
-|---|---|
-| Hora de publicación | Fecha del post |
-| Título / Descripción | Copy del post |
-| Tipo de publicación | Fotos · Videos · Enlaces |
-| Enlace permanente | URL del post |
-| Alcance | Impresiones (reach) |
-| Visualizaciones | Vistas de video |
-| Total de clics | Clics |
-| Reacciones | Reacciones |
-| Comentarios | Comentarios |
-| Veces que se compartió | Compartidos |
-
-> La tasa de interacción se calcula automáticamente:
-> **(Reacciones + Comentarios + Compartidos) ÷ Alcance**
-
----
-
-### Archivos de contenido — Instagram
-
-| Archivo | Descripción |
-|---|---|
-| `k1_contenido_instagram.xlsx` | Publicaciones Instagram Kabat One |
-| `sym_contenido_instagram.xlsx` | Publicaciones Instagram SYM |
-
-Es el export de **Meta Business Suite → Instagram → Publicaciones → Exportar datos**.
-
-**Cómo descargarlo:**
-1. Ve a [business.facebook.com](https://business.facebook.com) → selecciona tu cuenta de Instagram
-2. Menú izquierdo → **Publicaciones**
-3. Selecciona el rango de fechas deseado
-4. Clic en **Exportar datos** → descarga el archivo `.csv`
-5. Renómbralo como `k1_contenido_instagram.xlsx` (o `sym_contenido_instagram.xlsx`)
-6. Si el archivo descargado es `.csv`, ábrelo en Excel → Guardar como `.xlsx`
-
-**Columnas que reconoce el sistema:**
-
-| Columna del export | Métrica guardada |
-|---|---|
-| Hora de publicación | Fecha del post |
-| Descripción | Copy / caption del post |
-| Tipo de publicación | Imagen · Reel · Secuencia |
-| Enlace permanente | URL del post |
-| Alcance | Impresiones (reach) |
-| Visualizaciones | Reproducciones (Reels) |
-| Me gusta | Reacciones |
-| Comentarios | Comentarios |
-| Veces que se compartió | Compartidos |
-| Seguimientos | Seguidores ganados |
-| Veces que se guardó | Guardados (registrado como clics) |
-
-> La tasa de interacción se calcula automáticamente:
-> **(Me gusta + Comentarios + Compartidos) ÷ Alcance**
-
-> El archivo puede contener publicaciones de cualquier período —
-> el sistema las filtra por mes usando los filtros del panel superior.
+Los exports vienen directamente de **LinkedIn Analytics** y **Meta Business Suite**.
+La tasa de interacción se calcula automáticamente: **(Reacciones + Comentarios + Compartidos) ÷ Alcance**
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 7. INSIGHTS PARA IA
+    # 7. INSIGHTS CON IA
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("7 · Insights para IA"):
+    with st.expander("7 · Insights con IA (análisis directo con Claude)"):
         st.markdown("""
-Genera automáticamente un prompt estructurado listo para analizar con una IA
-como Claude o Gemini.
+Genera un **análisis estratégico completo directamente con Claude**, sin necesidad de
+copiar y pegar en ninguna herramienta externa.
 
-### ¿Qué incluye el script generado?
+### ¿Qué analiza?
 
-1. **Datos de KPIs del mes** — todas las métricas con su real, meta y % de cumplimiento
-2. **Top 5 publicaciones** — las de mayor engagement del mes
-3. **Bottom 5 publicaciones** — las de menor rendimiento
-4. **Rendimiento por tipo de contenido** — promedio de tasa de interacción por formato
+Con los datos del mes seleccionado en los filtros, Claude entrega:
 
-### ¿Qué pide a la IA?
+1. **Diagnóstico de salud** — calificación Excelente / Bueno / Regular / Crítico con justificación
+2. **Análisis de contenido ganador vs. perdedor** — qué tienen en común los posts del Top 5 y qué falló en el Bottom 5
+3. **Mínimo 5 ideas de temas** para el próximo mes con formato recomendado y justificación basada en datos
+4. **3 posts completos** listos para publicar (gancho, cuerpo, CTA y hashtags)
+5. **Una acción de impacto inmediato** — la única cosa que, hecha esta semana, más impacta los KPIs
 
-El prompt instruye a la IA para que entregue:
-1. Diagnóstico de salud de la cuenta (Excelente / Bueno / Regular / Crítico)
-2. Análisis de contenido ganador vs. perdedor
-3. Mínimo 5 ideas de temas para el próximo mes
-4. 3 posts completos listos para publicar (copy + hashtags + CTA)
-5. Una acción de impacto inmediato para esta semana
+### ¿Cómo usarlo?
 
-### Botones de acción
+1. Selecciona **marca**, **red social** y **mes** en los filtros superiores
+2. Clic en **🤖 Analizar con Claude**
+3. El análisis aparece progresivamente en pantalla (~20-40 segundos)
+4. Puedes **descargar el análisis** como `.txt` para compartirlo
 
-| Botón | Acción |
-|---|---|
-| **📋 Copiar** | Copia el script al portapapeles |
-| **🤖 Claude.ai** | Abre Claude en una nueva pestaña |
-| **✨ Gemini** | Abre Gemini en una nueva pestaña |
+### Importancia para la Parrilla de Contenido
 
-**Flujo recomendado:** Copia el script → abre Claude o Gemini → pega y envía.
+> ⭐ **El análisis de Insights se conecta directamente con la Parrilla.**
+> Si generas el análisis de LinkedIn, Facebook e Instagram del mes cerrado **antes** de
+> crear la parrilla del mes siguiente, Claude usará esas recomendaciones como base
+> estratégica para decidir qué publicar, qué pilares priorizar y qué formatos usar.
+
+**Recomendación:** genera el análisis de las 3 redes antes de crear la parrilla mensual.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 8. NOMENCLATURA DE ARCHIVOS
+    # 8. PARRILLA DE CONTENIDO
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("8 · Nomenclatura completa de archivos"):
-        col1, col2 = st.columns(2)
+    with st.expander("8 · Parrilla de Contenido — Flujo de trabajo completo"):
+        st.markdown("""
+La **Parrilla de Contenido** genera automáticamente el calendario editorial mensual
+usando inteligencia artificial. Claude actúa como Community Manager Senior especializado
+en marcas B2G del sector seguridad pública.
 
+---
+
+## Flujo de trabajo recomendado
+
+Sigue estos pasos en orden para obtener la parrilla más estratégica posible:
+
+```
+PASO 1 — Cierre del mes anterior
+  📁 Importar Datos
+     └─ Sube los exports de LinkedIn, Facebook e Instagram del mes cerrado
+        para las 2 marcas (Kabat One y SYM)
+
+PASO 2 — Registrar KPIs
+  🎯 Monitor de KPIs
+     └─ Captura metas y valores reales del mes cerrado
+        (especialmente las métricas manuales: alcance Instagram,
+         visualizaciones de seguidores Facebook)
+
+PASO 3 — Análisis con IA  ← CRÍTICO para la parrilla
+  🤖 Insights para IA
+     └─ Selecciona la marca (Kabat One o SYM)
+     └─ Repite para las 3 redes: LinkedIn → Facebook → Instagram
+     └─ Clic en "Analizar con Claude" en cada una
+     └─ Estos análisis quedan guardados y la Parrilla los usará
+
+PASO 4 — Generar Parrilla
+  📅 Parrilla de Contenido
+     └─ Selecciona el mes a planificar
+     └─ Investiga fechas especiales
+     └─ Elige el objetivo del mes
+     └─ Genera la parrilla
+     └─ Ajusta con el cuadro de diálogo si necesitas
+     └─ Descarga el Excel para el equipo de diseño
+```
+
+---
+
+## Lógica de publicaciones
+
+| Marca | Días de publicación | Redes |
+|---|---|---|
+| **Kabat One** | Lunes y Miércoles | LinkedIn · Facebook · Instagram |
+| **SYM** | Martes y Jueves | LinkedIn · Facebook · Instagram |
+
+Cada día de publicación genera **una sola pieza de contenido** adaptada a las 3 redes:
+- **LinkedIn** → copy formal, lenguaje de autoridad y liderazgo, 2-3 párrafos
+- **Facebook** → copy conversacional, tono cercano, 1-2 párrafos
+- **Instagram** → **idéntico a Facebook** (espejo 100%)
+
+Las **fechas especiales** (efemérides, días mundiales) se agregan como publicaciones
+**extra** en esa fecha específica — no reemplazan los días regulares.
+
+---
+
+## Secciones de la Parrilla
+
+### 📆 Fechas Especiales del Mes
+Clic en **🔍 Investigar fechas del mes** para que Claude busque automáticamente:
+- Fechas nacionales mexicanas relevantes para el sector seguridad
+- Días internacionales adaptables a un mensaje de seguridad
+- Efemérides tecnológicas o de innovación gubernamental
+
+Aparece un **calendario visual** con:
+- 🔵 Días azules = publicaciones regulares
+- 🟡 Días amarillos = fechas especiales encontradas
+
+Selecciona con los **checkboxes** cuáles incluir como publicaciones extra.
+Puedes deseleccionar cualquier fecha que no quieras incluir.
+
+---
+
+### 🎯 Objetivo del Mes
+Elige entre 6 opciones predefinidas o escribe uno personalizado:
+
+| Opción | Cuándo usarla |
+|---|---|
+| Posicionamiento y liderazgo | Meses de consolidación de marca |
+| Generación de leads | Cuando hay campaña activa o evento próximo |
+| Educación técnica | Para audiencias nuevas o post-evento |
+| Construcción de confianza | Cuando hay casos de éxito o testimonios disponibles |
+| Presencia en evento | Mes de expo, conferencia o temporada relevante |
+| Lanzamiento de producto | Cuando hay un nuevo módulo o funcionalidad |
+| Personalizado | Objetivos específicos que no encajan en las opciones anteriores |
+
+---
+
+### ✨ Generar Parrilla
+Claude recibe:
+- Brief completo de la marca (pilares, tono, hashtags, CTAs, mensajes clave)
+- Análisis de Insights del mes anterior (si fueron generados en el Paso 3)
+- Fechas especiales seleccionadas
+- Objetivo del mes
+- Días de publicación configurados
+
+El resultado es una tabla editable con una fila por pieza de contenido:
+
+| Columna | Contenido |
+|---|---|
+| Fecha | Fecha exacta de publicación |
+| Día | Día de la semana |
+| Tipo | Regular o Especial |
+| Pilar | Pilar de contenido |
+| Formato | Imagen estática, Carrusel, etc. |
+| Tema | Título conciso del post |
+| Copy LinkedIn | Texto completo para LinkedIn |
+| Copy Facebook / Instagram | Texto completo para Facebook e Instagram |
+| Arte Sugerida | Descripción detallada para el diseñador |
+| Hashtags | Set de 5-7 hashtags |
+| CTA | Llamado a la acción |
+
+Puedes **editar cualquier celda** directamente en la tabla antes de descargar.
+
+---
+
+### 💬 Cuadro de Ajustes
+Después de generar la parrilla, puedes pedirle cambios a Claude en lenguaje natural:
+
+**Ejemplos de ajustes:**
+> *"Los temas de posicionamiento ya los tengo cubiertos con 3 publicaciones que hice la semana pasada. Cámbiame esos posts por educación técnica."*
+
+> *"El post del lunes 7 hazlo sobre el lanzamiento del nuevo módulo de LPR que anunciamos."*
+
+> *"Quiero que el mes tenga más peso en casos de uso y menos en posicionamiento genérico."*
+
+> *"El copy de LinkedIn de la primera semana está muy largo, acórtalo a máximo 2 párrafos."*
+
+Claude ajusta solo lo que le pides, mantiene el resto igual y te explica brevemente qué cambió.
+El historial de ajustes queda visible para que puedas rastrear los cambios.
+
+---
+
+### 📥 Descargar Excel
+El archivo Excel incluye:
+- Todas las columnas visibles en la tabla
+- **Columna "Copy Instagram"** generada automáticamente como copia exacta de Facebook
+- Formato profesional con encabezados, ajuste de columnas y word-wrap
+
+Entrega el Excel al equipo de diseño con las columnas **Arte Sugerida** para guiar la producción visual.
+
+---
+
+## Conexión Insights → Parrilla
+
+Si generaste los análisis de Insights **antes** de crear la parrilla, la plataforma
+muestra una confirmación verde:
+
+> ✅ *Insights de IA de Mayo 2026 disponibles (LinkedIn, Facebook, Instagram) — se usarán como base estratégica.*
+
+En ese caso, Claude conoce:
+- Qué pilares tuvieron mejor engagement el mes anterior
+- Qué formatos funcionaron y cuáles no
+- Las recomendaciones de temas que ya identificó
+- Las tendencias de rendimiento por tipo de contenido
+
+Y toma decisiones editoriales basadas en datos reales, no solo en el brief.
+
+Si **no** hay análisis previo disponible, la parrilla se genera igualmente usando los
+datos históricos de la base de datos como referencia.
+        """)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 9. NOMENCLATURA
+    # ══════════════════════════════════════════════════════════════════════════
+    with st.expander("9 · Nomenclatura completa de archivos"):
+        col1, col2 = st.columns(2)
         with col1:
             st.markdown("""
 **KABAT ONE — LinkedIn**
@@ -431,7 +454,6 @@ k1_instagram_visitas.xlsx
 k1_contenido_instagram.xlsx
 ```
             """)
-
         with col2:
             st.markdown("""
 **SYM — LinkedIn**
@@ -459,7 +481,6 @@ sym_instagram_visitas.xlsx
 sym_contenido_instagram.xlsx
 ```
             """)
-
         st.info("""
 **Reglas generales:**
 - Todo en minúsculas, sin acentos, separado por `_`
@@ -469,61 +490,48 @@ sym_contenido_instagram.xlsx
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 9. MÉTRICAS ESPECIALES
+    # 10. MÉTRICAS ESPECIALES
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("9 · Métricas especiales y casos particulares"):
+    with st.expander("10 · Métricas especiales y casos particulares"):
         st.markdown("""
 ### Reacciones — LinkedIn (`auto_4pct`)
-
 La meta de Reacciones en LinkedIn **no se configura manualmente**. Se calcula
-automáticamente como el **4% de las impresiones reales del mes**. Si importas
-un nuevo archivo de impresiones, la meta de reacciones se recalcula sola.
+automáticamente como el **4% de las impresiones reales del mes**.
 
 ---
 
 ### Visualizaciones de Seguidores y No Seguidores — Facebook (`manual_50pct`)
-
 Facebook **no exporta estas métricas en CSV**. Por eso:
 - La **meta** se calcula automáticamente como el 50% de las visualizaciones totales del mes
-- El **real** debes capturarlo manualmente en el Monitor de KPIs leyendo el dato directamente
-  desde tu cuenta de Meta Business Suite
+- El **real** debes capturarlo manualmente en el Monitor de KPIs
 
 ---
 
 ### Alcance — Instagram (`manual`)
-
-El Alcance (Reach) de Instagram **no puede sumarse desde valores diarios** porque Meta
-lo deduplica por cuenta única. El CSV exporta cuántas cuentas vieron contenido cada día,
-pero una misma cuenta puede aparecer en múltiples días y Meta la cuenta solo una vez en
-el total mensual.
-
-Por eso el Alcance de Instagram se captura **manualmente** desde el reporte mensual de
-Meta Business Suite → sección Alcance.
+El Alcance de Instagram se captura **manualmente** porque Meta deduplica cuentas únicas
+y el CSV diario no refleja el total mensual real.
+Fuente: Meta Business Suite → sección Alcance del período.
 
 ---
 
-### Publicaciones — todas las redes (`manual`)
-
-Ninguna red social exporta un CSV con el conteo mensual de publicaciones propias.
-Tanto la meta como el real se capturan manualmente en el Monitor de KPIs.
+### Publicaciones — todas las redes (`contenido`)
+El conteo de publicaciones se calcula automáticamente desde los archivos de contenido
+importados. No necesitas capturarlo manualmente — el sistema cuenta los posts en la base
+de datos para el mes y red seleccionados.
 
 ---
 
 ### Conversión de archivos CSV → XLSX
-
-Si Meta te entrega un archivo `.csv`, conviértelo a `.xlsx` antes de subirlo.
-El sistema solo acepta archivos Excel (`.xlsx`).
-
-Pasos rápidos en Excel o Google Sheets:
-1. Abre el `.csv`
+Si Meta te entrega un `.csv`, conviértelo antes de subir:
+1. Abre el `.csv` en Excel o Google Sheets
 2. Archivo → Guardar como → `.xlsx`
-3. Renombra el archivo siguiendo la nomenclatura (`k1_instagram_visitas.xlsx`)
+3. Renombra siguiendo la nomenclatura (`k1_instagram_visitas.xlsx`)
         """)
 
     st.markdown("---")
     st.markdown(
         "<div style='color:#5b8db8;font-size:.75rem;text-align:center;'>"
-        "RRSS Analytics · Kabat One &amp; SYM · v1.0"
+        "RRSS Analytics · Kabat One &amp; SYM · v2.0 — IA integrada con Claude Opus"
         "</div>",
         unsafe_allow_html=True,
     )

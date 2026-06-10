@@ -1,54 +1,68 @@
-# modules/ai_insights.py — Generador de Script para IA
+# modules/ai_insights.py — Análisis directo con Claude IA
 
-import html as _html
+import os
+from pathlib import Path
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 
 from config import METRICAS
 from database import (
     get_metricas_mensuales, get_kpi_objetivos,
     get_kpi_manual, get_contenido_posts, get_contenido_redes,
+    get_publicaciones_count,
 )
 from utils import fmt_num, fmt_pct, kpi_status, mes_nombre
 
+ROOT = Path(__file__).parent.parent
 
-def show_insights():
-    marca        = st.session_state.get('marca_activa', 'k1')
-    marca_nombre = 'Kabat One' if marca == 'k1' else 'SYM'
-    red  = st.session_state.get('f_red', 'LinkedIn')
-    año  = st.session_state.get('f_año', 2026)
-    mes  = st.session_state.get('f_mes', 4)
 
-    st.markdown(f"""
-    <h2 style="color:#1e90ff;font-size:1.5rem;font-weight:700;margin-bottom:2px;">
-      🤖 Insights para IA — {marca_nombre}
-    </h2>
-    <p style="color:#5b8db8;font-size:.85rem;margin-top:0;">
-      {red} · {mes_nombre(mes)} {año} — Cambia los filtros en el panel lateral.
-    </p>
-    """, unsafe_allow_html=True)
+# ── API helpers ────────────────────────────────────────────────────────────────
 
-    st.markdown("---")
+def _load_env():
+    env_path = ROOT / '.env'
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if line and not line.startswith('#') and '=' in line:
+            key, _, val = line.partition('=')
+            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
 
-    # ── Recopilar datos ──────────────────────────────────────────────────────
-    reales       = get_metricas_mensuales(marca_nombre, red, año, mes)
-    objetivos    = get_kpi_objetivos(marca_nombre, red, año, mes)
+
+def _get_api_key():
+    _load_env()
+    return os.environ.get('ANTHROPIC_API_KEY', '').strip()
+
+
+def _stream_analysis(prompt):
+    """Generator: yields text chunks from Claude as they arrive."""
+    import anthropic
+    client = anthropic.Anthropic(api_key=_get_api_key())
+    with client.messages.stream(
+        model='claude-opus-4-8',
+        max_tokens=4000,
+        thinking={"type": "adaptive"},
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+
+# ── Data helpers ───────────────────────────────────────────────────────────────
+
+def _build_kpi_text(marca_nombre, red, año, mes, reales, objetivos):
     metricas_red = METRICAS.get(red, [])
-
-    redes_contenido = get_contenido_redes(marca_nombre)
-    posts_df = pd.DataFrame()
-    if red in redes_contenido:
-        posts_df = get_contenido_posts(marca_nombre, red, año, mes)
-
-    # ── Resumen de KPIs ──────────────────────────────────────────────────────
     vis_real = float(reales.get('visualizaciones', 0) or 0)
-    kpi_lines = []
+    lines = []
     for m in metricas_red:
         key  = m['key']
         tipo = m['tipo']
-        real = get_kpi_manual(marca_nombre, red, key, año, mes) \
-               if tipo in ('manual', 'manual_50pct') else float(reales.get(key, 0) or 0)
+        if tipo == 'contenido':
+            real = float(get_publicaciones_count(marca_nombre, red, año, mes))
+        elif tipo in ('manual', 'manual_50pct'):
+            real = get_kpi_manual(marca_nombre, red, key, año, mes)
+        else:
+            real = float(reales.get(key, 0) or 0)
         if tipo == 'auto_4pct':
             meta = round(float(reales.get('impresiones', 0) or 0) * 0.04)
         elif tipo in ('auto_50pct', 'manual_50pct'):
@@ -57,81 +71,81 @@ def show_insights():
             meta = float(objetivos.get(key, 0) or 0)
         _, _, pct = kpi_status(real, meta)
         pct_str = fmt_pct(pct) if meta else "sin meta"
-        kpi_lines.append(
+        lines.append(
             f"  - {m['label']}: {fmt_num(real)} "
             f"(meta: {fmt_num(meta) if meta else 'N/D'}, cumplimiento: {pct_str})"
         )
-    kpi_texto = "\n".join(kpi_lines) or "  (Sin datos de KPI para este período)"
+    return "\n".join(lines) or "  (Sin datos de KPI para este período)"
 
-    # ── Top 5 / Bottom 5 ────────────────────────────────────────────────────
-    top5_texto = "(No hay datos de publicaciones individuales cargados)"
-    bot5_texto = "(No hay datos de publicaciones individuales cargados)"
-    tendencias_texto = ""
 
-    if not posts_df.empty:
-        sort_col = 'tasa_interaccion' if 'tasa_interaccion' in posts_df.columns else 'impresiones'
-        df_sorted = posts_df.sort_values(sort_col, ascending=False).reset_index(drop=True)
+def _build_posts_text(posts_df, red):
+    if posts_df.empty:
+        return "(No hay datos de publicaciones)", "(No hay datos de publicaciones)", ""
 
-        def _post_line(row, i):
-            titulo = str(row.get('titulo', ''))[:80] or "(sin título)"
-            tipo   = str(row.get('tipo', '')) or "—"
-            imp    = fmt_num(row.get('impresiones', 0))
-            reac   = fmt_num(row.get('reacciones',  0))
-            tasa_v = float(row.get('tasa_interaccion', 0) or 0)
-            tasa   = fmt_pct(tasa_v * 100 if tasa_v <= 1 else tasa_v)
-            return f"  {i}. [{tipo}] \"{titulo}\" — Imp: {imp} | Reac: {reac} | Tasa: {tasa}"
+    sort_col = 'tasa_interaccion' if 'tasa_interaccion' in posts_df.columns else 'impresiones'
+    df_sorted = posts_df.sort_values(sort_col, ascending=False).reset_index(drop=True)
 
-        top5 = [_post_line(r, i+1) for i, (_, r) in enumerate(df_sorted.head(5).iterrows())]
-        bot5_df = df_sorted.tail(5)
-        if sort_col in bot5_df.columns:
-            bot5_df = bot5_df.sort_values(sort_col)
-        bot5 = [_post_line(r, i+1) for i, (_, r) in enumerate(bot5_df.iterrows())]
-        top5_texto = "\n".join(top5)
-        bot5_texto = "\n".join(bot5)
+    def _line(row, i):
+        titulo = str(row.get('titulo', ''))[:80] or "(sin título)"
+        tipo   = str(row.get('tipo', '')) or "—"
+        imp    = fmt_num(row.get('impresiones', 0))
+        reac   = fmt_num(row.get('reacciones', 0))
+        tasa_v = float(row.get('tasa_interaccion', 0) or 0)
+        tasa   = fmt_pct(tasa_v * 100 if tasa_v <= 1 else tasa_v)
+        return f"  {i}. [{tipo}] \"{titulo}\" — Imp: {imp} | Reac: {reac} | Tasa: {tasa}"
 
-        if 'tipo' in posts_df.columns:
-            tipo_res = posts_df.groupby('tipo')[[sort_col]].mean().sort_values(sort_col, ascending=False)
-            tendencias_lineas = [
-                f"  - {t}: promedio tasa {fmt_pct(v*100 if v <= 1 else v)}"
-                for t, v in zip(tipo_res.index, tipo_res[sort_col])
-            ]
-            tendencias_texto = "\n\n📌 RENDIMIENTO POR TIPO DE CONTENIDO:\n" + "\n".join(tendencias_lineas)
+    top5 = "\n".join(_line(r, i + 1) for i, (_, r) in enumerate(df_sorted.head(5).iterrows()))
+    bot5_df = df_sorted.tail(5).sort_values(sort_col)
+    bot5 = "\n".join(_line(r, i + 1) for i, (_, r) in enumerate(bot5_df.iterrows()))
 
-    # ── Script ───────────────────────────────────────────────────────────────
-    script = f"""Actúa como un especialista senior en redes sociales y creación de contenido digital con más de 10 años de experiencia en estrategia de marca, crecimiento orgánico y análisis de métricas. Tu objetivo es analizar los datos de rendimiento que te comparto, identificar patrones, diagnosticar la salud de la cuenta y proponer acciones concretas para mejorar los resultados.
+    tendencias = ""
+    if 'tipo' in posts_df.columns:
+        tipo_res = (posts_df.groupby('tipo')[[sort_col]]
+                    .mean().sort_values(sort_col, ascending=False))
+        lineas = [
+            f"  - {t}: promedio tasa {fmt_pct(v * 100 if v <= 1 else v)}"
+            for t, v in zip(tipo_res.index, tipo_res[sort_col])
+        ]
+        tendencias = "\n\n📌 RENDIMIENTO POR TIPO DE CONTENIDO:\n" + "\n".join(lineas)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    return top5, bot5, tendencias
+
+
+def _build_prompt(marca_nombre, red, año, mes, kpi_texto, top5, bot5, tendencias):
+    return f"""Actúa como un especialista senior en redes sociales y estrategia de contenido digital con más de 10 años de experiencia en marcas B2B/B2G del sector tecnología y seguridad pública en México. Tu objetivo es analizar los datos que te presento, identificar patrones, diagnosticar la salud de la cuenta y proponer acciones concretas y ejecutables.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 DATOS DE RENDIMIENTO — {marca_nombre} | {red} | {mes_nombre(mes)} {año}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📈 KPIs DEL MES:
 {kpi_texto}
 
 🏆 TOP 5 PUBLICACIONES (mayor engagement):
-{top5_texto}
+{top5}
 
 📉 BOTTOM 5 PUBLICACIONES (menor engagement):
-{bot5_texto}{tendencias_texto}
+{bot5}{tendencias}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Con base en los datos anteriores, proporciona el siguiente análisis:
+Con base en los datos anteriores, entrega el siguiente análisis:
 
 1. DIAGNÓSTICO DE SALUD (califica: Excelente / Bueno / Regular / Crítico)
-   Evalúa el estado general de la cuenta basándote en los números. Señala qué métricas están por encima o debajo del benchmark típico para {red}. ¿Hay tendencias de crecimiento o declive?
+   Evalúa el estado general de la cuenta. Señala qué métricas están por encima o debajo del benchmark típico para {red}. ¿Hay tendencias de crecimiento o declive?
 
 2. ANÁLISIS DE CONTENIDO GANADOR VS PERDEDOR
-   ¿Qué tienen en común los posts del Top 5? ¿Formato, tema, longitud, hora de publicación, tipo de llamado a la acción? ¿Qué falló en el Bottom 5 y por qué? Sé específico.
+   ¿Qué tienen en común los posts del Top 5? ¿Formato, tema, tipo de llamado a la acción? ¿Qué falló en el Bottom 5 y por qué? Sé específico.
 
 3. RECOMENDACIONES DE TEMAS PARA EL PRÓXIMO MES (mínimo 5 ideas)
    Para cada idea indica:
    - Tema / ángulo del mensaje
-   - Formato recomendado (video, carrusel, imagen estática, texto)
+   - Formato recomendado (carrusel, imagen estática, video, texto)
    - Por qué este tema tiene potencial basado en los datos
 
 4. PLAN DE PUBLICACIONES LISTAS PARA USAR (3 posts completos)
    Para cada post incluye:
-   - Título o primer línea gancho
+   - Primera línea gancho
    - Cuerpo del mensaje (máximo 4 líneas)
    - Llamado a la acción (CTA)
    - 5 hashtags relevantes para {red}
@@ -139,57 +153,124 @@ Con base en los datos anteriores, proporciona el siguiente análisis:
 5. ACCIÓN PRIORITARIA DE IMPACTO INMEDIATO
    Una sola acción específica que, implementada esta semana, tendría el mayor impacto positivo en las métricas de {marca_nombre} en {red}. Justifica por qué.
 
-Responde en español. Sé directo, específico y orientado a resultados. Evita generalidades — cada recomendación debe poder ejecutarse sin necesidad de más contexto.
-"""
+Responde en español. Sé directo, específico y orientado a resultados. Evita generalidades — cada recomendación debe poder ejecutarse sin más contexto."""
 
-    # ── UI ────────────────────────────────────────────────────────────────────
-    # Título + 3 botones en una sola fila
-    col_ttl, col_btns = st.columns([3, 2.8])
-    with col_ttl:
-        st.markdown("#### 📝 Script generado para IA")
-    with col_btns:
-        safe_script = _html.escape(script)
-        components.html(f"""
-        <style>
-          .brow {{ display:flex; gap:7px; margin-top:6px; flex-wrap:nowrap; }}
-          .btn  {{ border:none; border-radius:8px; padding:8px 13px; cursor:pointer;
-                   font-size:12px; font-weight:600; color:#fff; text-decoration:none;
-                   display:inline-block; white-space:nowrap; line-height:1.2; }}
-          .copy   {{ background:linear-gradient(135deg,#1e3a5f,#0d2137);
-                     border:1px solid #1e90ff; color:#7ab3e0; }}
-          .claude {{ background:linear-gradient(135deg,#7c3aed,#5b21b6); }}
-          .gemini {{ background:linear-gradient(135deg,#0066ff,#0052cc); }}
-        </style>
-        <textarea id="cb" style="position:fixed;top:-9999px;left:-9999px;">{safe_script}</textarea>
-        <div class="brow">
-          <button class="btn copy"
-            onclick="var e=document.getElementById('cb');e.select();
-                     document.execCommand('copy');
-                     this.innerHTML='✅ Copiado!';
-                     setTimeout(()=>{{this.innerHTML='📋 Copiar'}},2000);">
-            📋 Copiar
-          </button>
-          <a class="btn claude" href="https://claude.ai" target="_blank">🤖 Claude.ai</a>
-          <a class="btn gemini" href="https://gemini.google.com" target="_blank">✨ Gemini</a>
-        </div>
-        """, height=48)
 
-    st.code(script, language="text")
+# ── Vista principal ────────────────────────────────────────────────────────────
 
-    # ── Vista rápida ──────────────────────────────────────────────────────────
-    if reales:
+def show_insights():
+    marca        = st.session_state.get('marca_activa', 'k1')
+    marca_nombre = 'Kabat One' if marca == 'k1' else 'SYM'
+    red  = st.session_state.get('f_red', 'LinkedIn')
+    año  = st.session_state.get('f_año', 2026)
+    mes  = st.session_state.get('f_mes', 4)
+
+    st.markdown(
+        f"<h2 style='color:#1e90ff;font-size:1.5rem;font-weight:700;margin-bottom:2px;'>"
+        f"🤖 Insights con IA — {marca_nombre}</h2>"
+        f"<p style='color:#5b8db8;font-size:.85rem;margin-top:0;'>"
+        f"{red} · {mes_nombre(mes)} {año} — Cambia los filtros en el panel superior.</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("---")
+
+    # ── Recopilar datos ────────────────────────────────────────────────────────
+    reales    = get_metricas_mensuales(marca_nombre, red, año, mes)
+    objetivos = get_kpi_objetivos(marca_nombre, red, año, mes)
+
+    posts_df = pd.DataFrame()
+    if red in get_contenido_redes(marca_nombre):
+        posts_df = get_contenido_posts(marca_nombre, red, año, mes)
+
+    kpi_texto           = _build_kpi_text(marca_nombre, red, año, mes, reales, objetivos)
+    top5, bot5, trends  = _build_posts_text(posts_df, red)
+    prompt              = _build_prompt(marca_nombre, red, año, mes, kpi_texto, top5, bot5, trends)
+
+    analysis_key = f"ai_analysis_{marca}_{red}_{año}_{mes}"
+
+    # ── Vista rápida ───────────────────────────────────────────────────────────
+    metricas_red = METRICAS.get(red, [])
+    metricas_show = [m for m in metricas_red if reales.get(m['key'])][:4]
+    if metricas_show:
+        mcols = st.columns(len(metricas_show))
+        for col, m in zip(mcols, metricas_show):
+            real = float(reales.get(m['key'], 0) or 0)
+            meta = float(objetivos.get(m['key'], 0) or 0)
+            _, _, pct = kpi_status(real, meta)
+            with col:
+                st.metric(
+                    f"{m['icon']} {m['label']}",
+                    fmt_num(real),
+                    f"{fmt_pct(pct)} cumpl." if meta else None,
+                )
+
+    st.markdown("---")
+
+    # ── Controles de análisis ──────────────────────────────────────────────────
+    api_key = _get_api_key()
+    api_ok  = bool(api_key)
+
+    col_btn, col_clear = st.columns([3, 1])
+    with col_btn:
+        analyze = st.button(
+            "🤖  Analizar con Claude",
+            type="primary",
+            use_container_width=True,
+            disabled=not api_ok,
+            key="btn_analizar_claude",
+        )
+    with col_clear:
+        if st.button("🗑️  Limpiar", use_container_width=True, key="btn_limpiar_insights"):
+            st.session_state.pop(analysis_key, None)
+            st.rerun()
+
+    if not api_ok:
+        st.warning(
+            "Configura `ANTHROPIC_API_KEY` en el archivo `.env` para habilitar el análisis con IA."
+        )
+        return
+
+    # ── Llamada a Claude con streaming ─────────────────────────────────────────
+    if analyze:
+        st.session_state.pop(analysis_key, None)
+
+        thinking_msg  = st.info("⏳ Claude está analizando los datos… (20-40 segundos)")
+        result_holder = st.empty()
+        full_text     = ""
+
+        try:
+            for chunk in _stream_analysis(prompt):
+                if not full_text:
+                    thinking_msg.empty()
+                full_text += chunk
+                result_holder.markdown(full_text + "▌")
+
+            result_holder.markdown(full_text)
+            st.session_state[analysis_key] = full_text
+
+        except Exception as e:
+            thinking_msg.empty()
+            result_holder.empty()
+            st.error(f"Error al conectar con Claude: {e}")
+            return
+
+    # ── Mostrar análisis guardado ──────────────────────────────────────────────
+    elif analysis_key in st.session_state:
+        st.markdown(st.session_state[analysis_key])
+
+    # ── Acciones post-análisis ─────────────────────────────────────────────────
+    if analysis_key in st.session_state:
         st.markdown("---")
-        st.markdown("#### 📌 Vista rápida del mes")
-        metricas_show = [m for m in metricas_red if reales.get(m['key'])][:4]
-        if metricas_show:
-            mcols = st.columns(len(metricas_show))
-            for col, m in zip(mcols, metricas_show):
-                real = float(reales.get(m['key'], 0) or 0)
-                meta = float(objetivos.get(m['key'], 0) or 0)
-                _, _, pct = kpi_status(real, meta)
-                with col:
-                    st.metric(
-                        f"{m['icon']} {m['label']}",
-                        fmt_num(real),
-                        f"{fmt_pct(pct)} cumpl." if meta else None,
-                    )
+        col_dl, col_prompt = st.columns([2, 3])
+        with col_dl:
+            nombre = f"Insights_{marca_nombre.replace(' ','_')}_{red}_{mes_nombre(mes)}{año}.txt"
+            st.download_button(
+                "📥  Descargar análisis (.txt)",
+                data=st.session_state[analysis_key].encode('utf-8'),
+                file_name=nombre,
+                mime="text/plain",
+                use_container_width=True,
+            )
+        with col_prompt:
+            with st.expander("Ver prompt enviado a Claude"):
+                st.code(prompt, language="text")

@@ -76,6 +76,27 @@ def init_db():
             archivo           TEXT,
             UNIQUE(marca, red, fecha, titulo)
         );
+
+        CREATE TABLE IF NOT EXISTS parrilla_posts (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            marca           TEXT NOT NULL,
+            año             INTEGER NOT NULL,
+            mes             INTEGER NOT NULL,
+            fecha           TEXT NOT NULL,
+            dia_semana      TEXT,
+            tipo_dia        TEXT DEFAULT 'regular',
+            pilar           TEXT,
+            formato         TEXT,
+            tema            TEXT,
+            copy_linkedin   TEXT,
+            copy_facebook   TEXT,
+            arte_sugerencia TEXT,
+            hashtags        TEXT,
+            cta             TEXT,
+            estado          TEXT DEFAULT 'Borrador',
+            monday_item_id  TEXT,
+            UNIQUE(marca, año, mes, fecha, tipo_dia)
+        );
         """)
 
 
@@ -310,3 +331,64 @@ def delete_usuario(username):
     with _conn() as con:
         con.execute("DELETE FROM usuarios WHERE username != 'admin' AND username=?",
                     (username,))
+
+
+# ── Parrilla de contenido ─────────────────────────────────────────────────────
+
+def save_parrilla_posts(marca, año, mes, posts):
+    with _conn() as con:
+        for p in posts:
+            con.execute("""
+            INSERT INTO parrilla_posts
+            (marca, año, mes, fecha, dia_semana, tipo_dia, pilar, formato, tema,
+             copy_linkedin, copy_facebook, arte_sugerencia, hashtags, cta, estado)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(marca, año, mes, fecha, tipo_dia) DO UPDATE SET
+              dia_semana=excluded.dia_semana,
+              pilar=excluded.pilar,
+              formato=excluded.formato,
+              tema=excluded.tema,
+              copy_linkedin=excluded.copy_linkedin,
+              copy_facebook=excluded.copy_facebook,
+              arte_sugerencia=excluded.arte_sugerencia,
+              hashtags=excluded.hashtags,
+              cta=excluded.cta,
+              estado=excluded.estado
+            """, (
+                marca, año, mes,
+                p.get('fecha'), p.get('dia_semana'), p.get('tipo_dia', 'regular'),
+                p.get('pilar'), p.get('formato'), p.get('tema'),
+                p.get('copy_linkedin'), p.get('copy_facebook'),
+                p.get('arte_sugerencia'), p.get('hashtags'), p.get('cta'),
+                p.get('estado', 'Borrador'),
+            ))
+
+
+def get_parrilla_posts(marca, año, mes):
+    with _conn() as con:
+        rows = con.execute(
+            """SELECT * FROM parrilla_posts
+               WHERE marca=? AND año=? AND mes=?
+               ORDER BY fecha, tipo_dia""",
+            (marca, año, mes),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_monday_item_ids(updates):
+    """updates: list of (monday_item_id, marca, año, mes, fecha, tipo_dia)"""
+    with _conn() as con:
+        con.executemany(
+            """UPDATE parrilla_posts SET monday_item_id=?
+               WHERE marca=? AND año=? AND mes=? AND fecha=? AND tipo_dia=?""",
+            updates,
+        )
+
+
+def clear_monday_item_ids(marca, año, mes):
+    """Wipes all monday_item_id for a given month so the board can be re-synced from scratch."""
+    with _conn() as con:
+        con.execute(
+            "UPDATE parrilla_posts SET monday_item_id=NULL WHERE marca=? AND año=? AND mes=?",
+            (marca, año, mes),
+        )
