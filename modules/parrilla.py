@@ -1246,6 +1246,12 @@ def show_parrilla():
         st.error("No se encontró el brief de la marca.")
         return
 
+    # Si la parrilla en sesión es de otra marca, limpiarla para cargar la correcta
+    _meta_marca = st.session_state.get('parrilla_meta', {}).get('marca', '')
+    if _meta_marca and _meta_marca != brand.get('label', ''):
+        for _k in ('parrilla_df', 'parrilla_meta', 'parrilla_historial'):
+            st.session_state.pop(_k, None)
+
     rrss     = brand.get('rrss', {})
     dias_pub = rrss.get('frecuencia', {}).get('dias_publicacion', [])
     pilares  = rrss.get('pilares', [])
