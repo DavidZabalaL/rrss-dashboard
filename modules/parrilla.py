@@ -918,18 +918,32 @@ def _monday_request(api_key, query, variables=None):
 
 
 def _monday_get_board_info(api_key, board_id):
-    """Returns (board_name, columns_list). Raises on error."""
+    """Returns (board_name, columns_list, groups_list). Raises on error."""
     query = f"""query {{
       boards(ids: [{board_id}]) {{
         name
         columns {{ id title type }}
+        groups {{ id title }}
       }}
     }}"""
     data   = _monday_request(api_key, query)
     boards = data.get('boards', [])
     if not boards:
         raise ValueError(f"No se encontró el tablero con ID {board_id}.")
-    return boards[0].get('name', ''), boards[0].get('columns', [])
+    board  = boards[0]
+    return board.get('name', ''), board.get('columns', []), board.get('groups', [])
+
+
+def _monday_find_group(groups, marca):
+    """Returns group_id matching the brand name, or None."""
+    marca_lower = marca.lower()
+    for g in groups:
+        title = g.get('title', '').lower()
+        if 'kabat' in marca_lower and 'kabat' in title:
+            return g['id']
+        if 'sym' in marca_lower and 'sym' in title:
+            return g['id']
+    return None
 
 
 def _monday_match_columns(columns):
@@ -975,17 +989,31 @@ def _monday_col_value(field, value, col_type):
     return str(value)
 
 
-def _monday_create_item(api_key, board_id, item_name, col_vals_json):
-    mutation = """mutation ($boardId: ID!, $name: String!, $cols: JSON!) {
-      create_item(board_id: $boardId, item_name: $name, column_values: $cols) {
-        id name
-      }
-    }"""
-    data = _monday_request(api_key, mutation, {
-        "boardId": str(board_id),
-        "name":    item_name,
-        "cols":    col_vals_json,
-    })
+def _monday_create_item(api_key, board_id, item_name, col_vals_json, group_id=None):
+    if group_id:
+        mutation = """mutation ($boardId: ID!, $groupId: String!, $name: String!, $cols: JSON!) {
+          create_item(board_id: $boardId, group_id: $groupId, item_name: $name, column_values: $cols) {
+            id name
+          }
+        }"""
+        variables = {
+            "boardId":  str(board_id),
+            "groupId":  str(group_id),
+            "name":     item_name,
+            "cols":     col_vals_json,
+        }
+    else:
+        mutation = """mutation ($boardId: ID!, $name: String!, $cols: JSON!) {
+          create_item(board_id: $boardId, item_name: $name, column_values: $cols) {
+            id name
+          }
+        }"""
+        variables = {
+            "boardId": str(board_id),
+            "name":    item_name,
+            "cols":    col_vals_json,
+        }
+    data = _monday_request(api_key, mutation, variables)
     return data.get('create_item', {}).get('id')
 
 
@@ -1018,7 +1046,7 @@ def _monday_push_estados(df, marca, año, mes):
 
     # Find the Estado column id on the board
     try:
-        _, columns = _monday_get_board_info(api_key, board_id)
+        _, columns, _ = _monday_get_board_info(api_key, board_id)
     except Exception as e:
         return 0, 0, str(e)
 
@@ -1132,8 +1160,9 @@ def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
         for p in db_posts
     }
 
-    board_name, columns = _monday_get_board_info(api_key, board_id)
-    col_map = _monday_match_columns(columns)
+    board_name, columns, groups = _monday_get_board_info(api_key, board_id)
+    col_map  = _monday_match_columns(columns)
+    group_id = _monday_find_group(groups, marca)
 
     # Field-to-post-key mapping
     _FIELD_MAP = {
@@ -1182,7 +1211,7 @@ def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
                 col_vals[col_info['id']] = formatted
 
         col_vals_json = json.dumps(col_vals, ensure_ascii=False) if col_vals else "{}"
-        item_id = _monday_create_item(api_key, board_id, item_name, col_vals_json)
+        item_id = _monday_create_item(api_key, board_id, item_name, col_vals_json, group_id)
 
         if item_id:
             _monday_add_update(api_key, item_id, _monday_format_update(p))
