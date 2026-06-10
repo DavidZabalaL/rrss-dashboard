@@ -131,12 +131,34 @@ def _call_gemini_raw(prompt):
     url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}'
     body = json.dumps({
         'contents': [{'parts': [{'text': prompt}]}],
-        'generationConfig': {'maxOutputTokens': 8192},
+        'generationConfig': {
+            'maxOutputTokens': 65536,
+            'temperature': 0.7,
+        },
+        'safetySettings': [
+            {'category': 'HARM_CATEGORY_HARASSMENT',       'threshold': 'BLOCK_NONE'},
+            {'category': 'HARM_CATEGORY_HATE_SPEECH',      'threshold': 'BLOCK_NONE'},
+            {'category': 'HARM_CATEGORY_SEXUALLY_EXPLICIT','threshold': 'BLOCK_NONE'},
+            {'category': 'HARM_CATEGORY_DANGEROUS_CONTENT','threshold': 'BLOCK_NONE'},
+        ],
     }).encode()
     req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
-    resp = urllib.request.urlopen(req, timeout=120)
+    resp = urllib.request.urlopen(req, timeout=180)
     data = json.loads(resp.read())
-    return data['candidates'][0]['content']['parts'][0]['text']
+    candidates = data.get('candidates', [])
+    if not candidates:
+        prompt_fb = data.get('promptFeedback', {})
+        raise RuntimeError(f"Gemini bloqueó la solicitud: {prompt_fb.get('blockReason', 'razón desconocida')}")
+    cand   = candidates[0]
+    reason = cand.get('finishReason', '')
+    if reason == 'SAFETY':
+        raise RuntimeError("Gemini bloqueó la respuesta por filtros de seguridad. Intenta con Claude.")
+    text = ''
+    for part in cand.get('content', {}).get('parts', []):
+        text += part.get('text', '')
+    if not text.strip():
+        raise RuntimeError(f"Gemini devolvió respuesta vacía (finishReason: {reason}).")
+    return text
 
 
 def _stream_gemini(prompt):
@@ -706,7 +728,17 @@ def _call_claude_json(prompt):
 
 
 def _parse_json(text):
-    text  = text.strip()
+    text = text.strip()
+    # Strip markdown code fences if present
+    if '```' in text:
+        parts = text.split('```')
+        for p in parts:
+            p = p.strip()
+            if p.startswith('json'):
+                p = p[4:].strip()
+            if p.startswith('['):
+                text = p
+                break
     start = text.find('[')
     end   = text.rfind(']') + 1
     if start == -1 or end == 0:
