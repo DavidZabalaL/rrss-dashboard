@@ -714,6 +714,22 @@ def _parse_json(text):
     return json.loads(text[start:end])
 
 
+def _parse_json_obj(text):
+    """Parse a JSON object {...} from raw text (strips markdown fences)."""
+    text = text.strip()
+    # Strip markdown code fences if present
+    if text.startswith('```'):
+        text = text.split('```', 2)[1]
+        if text.startswith('json'):
+            text = text[4:]
+        text = text.strip()
+    start = text.find('{')
+    end   = text.rfind('}') + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"No se encontró JSON.\nRespuesta:\n{text[:500]}")
+    return json.loads(text[start:end])
+
+
 def _call_adjustment(prompt):
     """Returns (descripcion_cambios, parrilla_json_list)."""
     provider    = _ai_provider()
@@ -1942,7 +1958,7 @@ def show_parrilla():
                         with st.spinner(f"{_ai_lbl_img} está creando los prompts… (10-20 seg)"):
                             try:
                                 raw = _call_claude_json(prompt_req)
-                                result = _parse_json(raw)
+                                result = _parse_json_obj(raw)
                                 if not result:
                                     result = {'error': 'No se pudo parsear la respuesta', 'raw': raw}
                                 st.session_state[cache_key] = result
