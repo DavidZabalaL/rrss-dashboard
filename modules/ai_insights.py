@@ -20,13 +20,19 @@ ROOT = Path(__file__).parent.parent
 
 def _load_env():
     env_path = ROOT / '.env'
-    if not env_path.exists():
-        return
-    for line in env_path.read_text(encoding='utf-8').splitlines():
-        line = line.strip()
-        if line and not line.startswith('#') and '=' in line:
-            key, _, val = line.partition('=')
-            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+    if env_path.exists():
+        for line in env_path.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, _, val = line.partition('=')
+                os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+    try:
+        import streamlit as st
+        for key, val in st.secrets.items():
+            if isinstance(val, str):
+                os.environ.setdefault(key, val)
+    except Exception:
+        pass
 
 
 def _get_api_key():
