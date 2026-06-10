@@ -633,9 +633,8 @@ def _call_claude_json(prompt):
     import anthropic
     client = anthropic.Anthropic(api_key=_get_api_key())
     with client.messages.stream(
-        model='claude-opus-4-8',
-        max_tokens=10000,
-        thinking={"type": "adaptive"},
+        model='claude-sonnet-4-6',
+        max_tokens=8000,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         msg = stream.get_final_message()
@@ -664,9 +663,8 @@ def _call_adjustment(prompt):
     thinking_ph = st.info("⏳ Claude está ajustando la parrilla…")
 
     with client.messages.stream(
-        model='claude-opus-4-8',
-        max_tokens=10000,
-        thinking={"type": "adaptive"},
+        model='claude-sonnet-4-6',
+        max_tokens=8000,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         for chunk in stream.text_stream:

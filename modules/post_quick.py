@@ -112,9 +112,8 @@ def _stream_quick_post(prompt):
     import anthropic
     client = anthropic.Anthropic(api_key=_get_api_key())
     with client.messages.stream(
-        model='claude-opus-4-8',
+        model='claude-sonnet-4-6',
         max_tokens=4000,
-        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         for text in stream.text_stream:
