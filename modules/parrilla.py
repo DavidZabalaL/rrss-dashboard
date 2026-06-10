@@ -568,6 +568,65 @@ Modifiqué los posts del 7 y 14 de julio para enfocarlos en Educación Técnica 
 """
 
 
+# ── Image Prompt Builder ───────────────────────────────────────────────────────
+
+def _build_image_prompt_request(row, brand, red_formato):
+    tema   = str(row.get('Tema', ''))
+    pilar  = str(row.get('Pilar', ''))
+    arte   = str(row.get('Arte Sugerida', ''))
+    copy   = str(row.get('Copy LinkedIn', ''))[:300]
+    fmt    = str(row.get('Formato', ''))
+    fecha  = str(row.get('Fecha', ''))
+    tipo   = str(row.get('Tipo', 'regular'))
+    label  = brand.get('label', '')
+    tone   = brand.get('tone', {}).get('style', 'profesional y moderno')
+    avoid  = ', '.join(brand.get('tone', {}).get('avoid', []))
+
+    if 'LinkedIn' in red_formato:
+        aspect = '1200×628 px (horizontal, landscape)'
+    elif 'Instagram' in red_formato or 'Facebook' in red_formato:
+        aspect = '1080×1080 px (cuadrado)'
+    else:
+        aspect = '1200×628 px (LinkedIn) y 1080×1080 px (Instagram/Facebook)'
+
+    return f"""Eres un director de arte especializado en contenido B2G para sector tecnología y seguridad pública en México.
+
+PUBLICACIÓN:
+- Marca: {label}
+- Fecha: {fecha} · Tipo: {tipo}
+- Pilar de contenido: {pilar}
+- Formato: {fmt}
+- Tema: {tema}
+- Sugerencia de arte original: {arte}
+- Copy de referencia: {copy}…
+- Tono de marca: {tone}
+- Evitar: {avoid}
+- Formato de imagen destino: {aspect}
+
+TAREA:
+Genera dos prompts de imagen de nivel profesional para que un diseñador o el equipo de contenido pueda producir la imagen en IA generativa.
+
+REGLAS:
+- Sin texto ni logos en la imagen (eso lo agrega el diseñador en post-producción)
+- Evitar imágenes de conflicto, violencia o armas
+- Preferir tecnología, profesionalismo, modernidad, entornos urbanos de México/LatAm
+- Los prompts deben ser en INGLÉS (mejor resultado en ambas herramientas)
+- Estilo coherente con sector seguridad pública y tecnología
+
+Responde SOLO con JSON válido, sin texto antes ni después:
+{{
+  "descripcion_corta": "(15 palabras máximo describiendo la imagen)",
+  "dalle3": {{
+    "prompt": "(150-250 palabras en inglés, muy detallado: sujeto, composición, iluminación, paleta, estilo, ambiente, acabado técnico)",
+    "notas": "(1 frase de consejo para usar en ChatGPT)"
+  }},
+  "gemini": {{
+    "prompt": "(100-180 palabras en inglés, optimizado para Gemini Imagen: descriptivo y directo)",
+    "notas": "(1 frase de consejo para usar en Gemini)"
+  }}
+}}"""
+
+
 # ── Claude Calls ───────────────────────────────────────────────────────────────
 
 def _call_claude_json(prompt):
@@ -1380,7 +1439,7 @@ def show_parrilla():
     df = st.session_state['parrilla_df']
 
     # ── TABS ───────────────────────────────────────────────────────────────────
-    tab1, tab2, tab3 = st.tabs(["📋 Parrilla", "📅 Calendario", "🟦 Monday.com"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Parrilla", "📅 Calendario", "🟦 Monday.com", "🎨 Prompts de Imagen"])
 
     # ═══ TAB 1: PARRILLA ════════════════════════════════════════════════════════
     with tab1:
@@ -1760,3 +1819,120 @@ def show_parrilla():
                             f"{prefix} {item.get('fecha','')} ({item.get('tipo_dia','')}) — "
                             f"[Ver en Monday.com]({link})"
                         )
+
+    # ═══ TAB 4: PROMPTS DE IMAGEN ════════════════════════════════════════════════
+    with tab4:
+        st.markdown("#### 🎨 Generador de Prompts de Imagen")
+        st.caption(
+            "Selecciona una publicación y genera prompts profesionales listos para pegar "
+            "en **DALL-E 3 (ChatGPT)** y **Gemini Imagen** (Google)."
+        )
+
+        api_key_img = _get_api_key()
+        if not api_key_img:
+            st.warning("Configura `ANTHROPIC_API_KEY` para usar este módulo.")
+        else:
+            # Selector de publicación
+            opciones = []
+            for _, row in df.iterrows():
+                fecha = str(row.get('Fecha', ''))
+                tema  = str(row.get('Tema', ''))[:50]
+                tipo  = str(row.get('Tipo', ''))
+                lbl   = f"{fecha} · {tema}" + (" ⭐" if tipo == 'especial' else "")
+                opciones.append(lbl)
+
+            if not opciones:
+                st.info("No hay publicaciones en la parrilla.")
+            else:
+                sel_lbl = st.selectbox("Publicación", opciones, key="img_prompt_sel")
+                sel_idx = opciones.index(sel_lbl)
+                sel_row = df.iloc[sel_idx].to_dict()
+
+                col_red, _ = st.columns([2, 3])
+                with col_red:
+                    red_img = st.radio(
+                        "Formato destino",
+                        ["LinkedIn (1200×628)", "Instagram / Facebook (1080×1080)", "Ambos"],
+                        horizontal=True,
+                        key="img_prompt_red",
+                    )
+
+                if st.button("✨  Generar Prompts de Imagen", type="primary",
+                             use_container_width=True, key="btn_gen_img_prompt"):
+                    cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}"
+                    st.session_state.pop(cache_key, None)
+
+                    prompt_req = _build_image_prompt_request(sel_row, brand, red_img)
+                    with st.spinner("Claude está creando los prompts… (10-20 seg)"):
+                        try:
+                            raw = _call_claude_json(prompt_req)
+                            result = _parse_json(raw)
+                            if not result:
+                                result = {'error': 'No se pudo parsear la respuesta', 'raw': raw}
+                            st.session_state[cache_key] = result
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+
+                # Mostrar resultado
+                cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}"
+                if cache_key in st.session_state:
+                    result = st.session_state[cache_key]
+                    if 'error' in result:
+                        st.error(result['error'])
+                        if 'raw' in result:
+                            with st.expander("Respuesta cruda"):
+                                st.text(result['raw'])
+                    else:
+                        desc = result.get('descripcion_corta', '')
+                        if desc:
+                            st.markdown(f"**Imagen:** {desc}")
+                        st.markdown("---")
+
+                        col_dalle, col_gemini = st.columns(2)
+
+                        with col_dalle:
+                            st.markdown("### 🤖 DALL-E 3 · ChatGPT")
+                            dalle = result.get('dalle3', {})
+                            prompt_text = dalle.get('prompt', '')
+                            st.text_area(
+                                "Copia y pega en ChatGPT → DALL-E 3",
+                                value=prompt_text,
+                                height=260,
+                                key="dalle_prompt_area",
+                            )
+                            notas = dalle.get('notas', '')
+                            if notas:
+                                st.caption(f"💡 {notas}")
+
+                        with col_gemini:
+                            st.markdown("### 🌐 Gemini Imagen · Google")
+                            gemini = result.get('gemini', {})
+                            prompt_text_g = gemini.get('prompt', '')
+                            st.text_area(
+                                "Copia y pega en Gemini (gemini.google.com)",
+                                value=prompt_text_g,
+                                height=260,
+                                key="gemini_prompt_area",
+                            )
+                            notas_g = gemini.get('notas', '')
+                            if notas_g:
+                                st.caption(f"💡 {notas_g}")
+
+                        # Guía de uso
+                        with st.expander("📖 ¿Cómo usar estos prompts?"):
+                            st.markdown("""
+**ChatGPT / DALL-E 3:**
+1. Abre [chatgpt.com](https://chatgpt.com) y crea una nueva conversación
+2. Haz clic en el ícono de imagen (🖼️) o escribe el prompt directamente
+3. Si quieres variaciones, escribe: *"genera 4 variaciones de este prompt"*
+
+**Gemini Imagen (Google):**
+1. Ve a [gemini.google.com](https://gemini.google.com)
+2. Pega el prompt en el chat
+3. Gemini generará la imagen automáticamente
+
+**Consejo:** Después de generar, pide ajustes con frases como:
+- *"Hazla más minimalista"*
+- *"Cambia el fondo a azul oscuro"*
+- *"Versión sin personas, solo tecnología"*
+""")
