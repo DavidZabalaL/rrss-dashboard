@@ -1857,21 +1857,35 @@ def show_parrilla():
                         key="img_prompt_red",
                     )
 
+                _img_error_ph = st.empty()
+
                 if st.button("✨  Generar Prompts de Imagen", type="primary",
                              use_container_width=True, key="btn_gen_img_prompt"):
                     cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}"
                     st.session_state.pop(cache_key, None)
+                    _img_error_ph.empty()
 
                     prompt_req = _build_image_prompt_request(sel_row, brand, red_img)
-                    with st.spinner("Claude está creando los prompts… (10-20 seg)"):
-                        try:
-                            raw = _call_claude_json(prompt_req)
-                            result = _parse_json(raw)
-                            if not result:
-                                result = {'error': 'No se pudo parsear la respuesta', 'raw': raw}
-                            st.session_state[cache_key] = result
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+                    _spin_ph = st.empty()
+                    with _spin_ph:
+                        with st.spinner("Claude está creando los prompts… (10-20 seg)"):
+                            try:
+                                raw = _call_claude_json(prompt_req)
+                                result = _parse_json(raw)
+                                if not result:
+                                    result = {'error': 'No se pudo parsear la respuesta', 'raw': raw}
+                                st.session_state[cache_key] = result
+                            except Exception as e:
+                                err_msg = str(e)
+                                if 'credit' in err_msg.lower() or 'balance' in err_msg.lower():
+                                    _img_error_ph.error(
+                                        "❌ Saldo insuficiente en Anthropic. "
+                                        "Agrega créditos en [console.anthropic.com](https://console.anthropic.com) "
+                                        "→ Billing."
+                                    )
+                                else:
+                                    _img_error_ph.error(f"Error al generar: {err_msg}")
+                    _spin_ph.empty()
 
                 # Mostrar resultado
                 cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}"
