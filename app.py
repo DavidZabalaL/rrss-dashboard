@@ -1,5 +1,6 @@
 # app.py — Punto de entrada
 
+import os
 import sys
 from pathlib import Path
 from datetime import date
@@ -424,9 +425,18 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
+    import subprocess as _sp
+    try:
+        _commit = _sp.check_output(['git','rev-parse','--short','HEAD'],
+                                   cwd=str(ROOT), text=True).strip()
+    except Exception:
+        _commit = 'n/a'
+    _api_ok  = bool(os.environ.get('ANTHROPIC_API_KEY','').strip())
+    _api_lbl = '✅ API' if _api_ok else '❌ API'
     st.markdown(
-        f"<div style='color:#5b8db8;font-size:.78rem;'>"
-        f"👤 {user.get('nombre','—')} · {user.get('role','').title()}</div>",
+        f"<div style='color:#5b8db8;font-size:.72rem;'>"
+        f"👤 {user.get('nombre','—')} · {user.get('role','').title()}<br>"
+        f"<span style='font-family:monospace'>v {_commit} · {_api_lbl}</span></div>",
         unsafe_allow_html=True,
     )
     if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
