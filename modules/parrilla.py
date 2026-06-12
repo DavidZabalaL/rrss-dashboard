@@ -267,43 +267,19 @@ def _ai_provider():
         return 'gemini'
 
 
-def _logo_settings():
-    """Read logo configuration from session state with safe defaults."""
-    try:
-        return {
-            'variant':  st.session_state.get('logo_variant', 'white'),
-            'position': st.session_state.get('logo_position', 'bottom-right'),
-            'pct':      st.session_state.get('logo_pct', 0.20),
-            'custom':   st.session_state.get('logo_custom_bytes'),
-            'enabled':  st.session_state.get('logo_enabled', True),
-        }
-    except Exception:
-        return {'variant': 'white', 'position': 'bottom-right', 'pct': 0.20,
-                'custom': None, 'enabled': True}
-
-
-def _composite_logo(img_bytes, brand, position=None, logo_pct=None,
-                    logo_variant=None, custom_logo_bytes=None):
+def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20,
+                    logo_variant='white', custom_logo_bytes=None):
     """Overlay the brand logo on the generated image. Returns PNG bytes."""
     from PIL import Image
 
-    cfg = _logo_settings()
-    if not cfg['enabled']:
-        return img_bytes
-
-    _position  = position       or cfg['position']
-    _logo_pct  = logo_pct       or cfg['pct']
-    _variant   = logo_variant   or cfg['variant']
-    _custom    = custom_logo_bytes or cfg['custom']
-
-    if _custom:
+    if custom_logo_bytes:
         try:
-            logo_img = Image.open(io.BytesIO(_custom)).convert('RGBA')
+            logo_img = Image.open(io.BytesIO(custom_logo_bytes)).convert('RGBA')
         except Exception:
             return img_bytes
     else:
         brand_id  = brand.get('brand_id', '')
-        logo_path = ROOT / 'marca' / brand_id / 'logos' / f'{_variant}.png'
+        logo_path = ROOT / 'marca' / brand_id / 'logos' / f'{logo_variant}.png'
         if not logo_path.exists():
             logo_path = ROOT / 'marca' / brand_id / 'logos' / 'white.png'
         if not logo_path.exists():
@@ -313,22 +289,21 @@ def _composite_logo(img_bytes, brand, position=None, logo_pct=None,
     base_img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
 
     bw, bh   = base_img.size
-    logo_w   = int(bw * _logo_pct)
+    logo_w   = int(bw * logo_pct)
     ratio    = logo_w / logo_img.width
     logo_h   = int(logo_img.height * ratio)
     logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
 
     pad = int(bw * 0.03)
-    if _position == 'bottom-right':
-        x = bw - logo_w - pad
-        y = bh - logo_h - pad
-    elif _position == 'bottom-left':
+    if position == 'bottom-right':
+        x = bw - logo_w - pad; y = bh - logo_h - pad
+    elif position == 'bottom-left':
         x, y = pad, bh - logo_h - pad
-    elif _position == 'top-right':
+    elif position == 'top-right':
         x, y = bw - logo_w - pad, pad
-    elif _position == 'center':
+    elif position == 'center':
         x, y = (bw - logo_w) // 2, (bh - logo_h) // 2
-    else:  # top-left
+    else:
         x, y = pad, pad
 
     base_img.paste(logo_img, (x, y), logo_img)
@@ -336,6 +311,122 @@ def _composite_logo(img_bytes, brand, position=None, logo_pct=None,
     out = io.BytesIO()
     base_img.convert('RGB').save(out, format='PNG')
     return out.getvalue()
+
+
+def _logo_adder_ui(key_prefix, img_bytes, brand):
+    """
+    Inline logo overlay widget. Returns composited PNG bytes when Apply is clicked, else None.
+    key_prefix must be unique per widget instance.
+    """
+    _open_key = f"_la_open_{key_prefix}"
+    _var_key  = f"_la_var_{key_prefix}"
+    _pos_key  = f"_la_pos_{key_prefix}"
+    _pct_key  = f"_la_pct_{key_prefix}"
+    _cust_key = f"_la_cust_{key_prefix}"
+    _is_open  = st.session_state.get(_open_key, False)
+
+    if st.button(
+        "🏷️ Cerrar" if _is_open else "🏷️ Agregar logo",
+        key=f"_la_toggle_{key_prefix}",
+        use_container_width=True,
+    ):
+        st.session_state[_open_key] = not _is_open
+        st.rerun()
+
+    if not _is_open:
+        return None
+
+    _brand_id   = brand.get('brand_id', '')
+    _logo_dir   = ROOT / 'marca' / _brand_id / 'logos'
+    _avail_vars = [v for v in ('white', 'color') if (_logo_dir / f'{v}.png').exists()]
+    _var_labels = {'white': '⬜ Blanco', 'color': '🎨 Color'}
+    _has_custom = bool(st.session_state.get(_cust_key))
+    _cur_var    = st.session_state.get(_var_key, _avail_vars[0] if _avail_vars else 'white')
+
+    if _avail_vars:
+        _vcols = st.columns(len(_avail_vars))
+        for _vi, _vv in enumerate(_avail_vars):
+            with _vcols[_vi]:
+                st.image(str(_logo_dir / f'{_vv}.png'), use_container_width=True)
+                _is_sel = (_cur_var == _vv) and not _has_custom
+                if st.button(
+                    _var_labels[_vv],
+                    key=f"_la_vbtn_{key_prefix}_{_vv}",
+                    type="primary" if _is_sel else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state[_var_key]  = _vv
+                    st.session_state[_cust_key] = None
+                    st.rerun()
+
+    _cust_up = st.file_uploader(
+        "O sube tu propio logo (PNG/JPG)",
+        type=['png', 'jpg', 'jpeg'],
+        key=f"_la_uploader_{key_prefix}",
+    )
+    if _cust_up is not None:
+        _raw = _cust_up.read()
+        if _raw:
+            from PIL import Image as _PIL_la
+            _cl = _PIL_la.open(io.BytesIO(_raw)).convert('RGBA')
+            _cb = io.BytesIO(); _cl.save(_cb, format='PNG')
+            st.session_state[_cust_key] = _cb.getvalue()
+            st.session_state[_var_key]  = 'custom'
+            _has_custom = True
+
+    if _has_custom:
+        _hc1, _hc2 = st.columns([5, 1])
+        _hc1.caption("✅ Logo propio activo")
+        with _hc2:
+            if st.button("🗑️", key=f"_la_rmcust_{key_prefix}", help="Quitar logo propio"):
+                st.session_state[_cust_key] = None
+                st.session_state[_var_key]  = _avail_vars[0] if _avail_vars else 'white'
+                st.rerun()
+
+    _pos_opts = {
+        '↘ Inf. derecha':   'bottom-right',
+        '↙ Inf. izquierda': 'bottom-left',
+        '↗ Sup. derecha':   'top-right',
+        '↖ Sup. izquierda': 'top-left',
+        '🔲 Centro':         'center',
+    }
+    _cur_pos     = st.session_state.get(_pos_key, 'bottom-right')
+    _cur_pos_lbl = next((k for k, v in _pos_opts.items() if v == _cur_pos), '↘ Inf. derecha')
+    _sel_pos_lbl = st.selectbox(
+        "Posición",
+        list(_pos_opts.keys()),
+        index=list(_pos_opts.keys()).index(_cur_pos_lbl),
+        key=f"_la_pos_sel_{key_prefix}",
+    )
+    st.session_state[_pos_key] = _pos_opts[_sel_pos_lbl]
+
+    _cur_pct = int(st.session_state.get(_pct_key, 20))
+    _pct_val = st.slider(
+        "Tamaño del logo (%)", min_value=8, max_value=40,
+        value=_cur_pct, step=2,
+        key=f"_la_pct_sl_{key_prefix}",
+    )
+    st.session_state[_pct_key] = _pct_val
+
+    if st.button("✅ Aplicar logo", key=f"_la_apply_{key_prefix}", type="primary", use_container_width=True):
+        _final_var  = st.session_state.get(_var_key, 'white')
+        _final_pos  = st.session_state.get(_pos_key, 'bottom-right')
+        _final_pct  = st.session_state.get(_pct_key, 20) / 100
+        _final_cust = st.session_state.get(_cust_key)
+        try:
+            _result = _composite_logo(
+                img_bytes, brand,
+                position=_final_pos,
+                logo_pct=_final_pct,
+                logo_variant=_final_var,
+                custom_logo_bytes=_final_cust,
+            )
+            st.session_state[_open_key] = False
+            return _result
+        except Exception as _le:
+            st.error(f"Error al aplicar logo: {_le}")
+
+    return None
 
 
 def _edit_imagen_gemini(image_bytes, instruction):
@@ -2366,26 +2457,18 @@ def show_parrilla():
                     if _up_hist:
                         st.caption(f"Versión {_up_ver} · {len(_up_hist)} edición(es)")
 
-                    _col_logo_btn, _col_dl_up = st.columns(2)
-                    with _col_logo_btn:
-                        if st.button(
-                            "🏷️ Agregar logo",
-                            use_container_width=True,
-                            key="btn_up_logo",
-                            help="Superpone el logo blanco de la marca en la esquina inferior derecha",
-                        ):
-                            _with_logo = _composite_logo(_up_current, brand)
-                            _up_hist.append({'instruction': '[logo agregado]', 'bytes': _with_logo})
-                            st.rerun()
-                    with _col_dl_up:
-                        st.download_button(
-                            f"📥 Descargar v{_up_ver}",
-                            data=_up_current,
-                            file_name=f"imagen_editada_v{_up_ver}.png",
-                            mime="image/png",
-                            use_container_width=True,
-                            key="btn_dl_upload",
-                        )
+                    st.download_button(
+                        f"📥 Descargar v{_up_ver}",
+                        data=_up_current,
+                        file_name=f"imagen_editada_v{_up_ver}.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        key="btn_dl_upload",
+                    )
+                    _logo_res_up = _logo_adder_ui(f"up_editor_{id(_up_cache)}", _up_current, brand)
+                    if _logo_res_up is not None:
+                        _up_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_up})
+                        st.rerun()
 
                 with _col_up_ctrl:
                     st.markdown("**Editar con IA**")
@@ -2438,91 +2521,6 @@ def show_parrilla():
                                 st.rerun()
                             except Exception as _ue:
                                 _up_err_ph.error(f"Error al editar: {_ue}")
-
-        # ── Configuración de Logo ──────────────────────────────────────────────
-        with st.expander("🏷️ Configuración de logo", expanded=False):
-            st.caption("Estas opciones aplican a todas las imágenes generadas en esta pestaña.")
-
-            _brand_id_logo = brand.get('brand_id', '')
-            _logo_dir      = ROOT / 'marca' / _brand_id_logo / 'logos'
-            _available_vars = {
-                v: _logo_dir / f'{v}.png'
-                for v in ('white', 'color')
-                if (_logo_dir / f'{v}.png').exists()
-            }
-
-            _lc1, _lc2 = st.columns([2, 3])
-            with _lc1:
-                st.markdown("**Variante de logo**")
-                _lcols = st.columns(len(_available_vars) + 1)
-                _var_labels = {'white': '⬜ Blanco', 'color': '🎨 Color'}
-                for _li, (_lvar, _lpath) in enumerate(_available_vars.items()):
-                    with _lcols[_li]:
-                        st.image(str(_lpath), use_container_width=True)
-                        _is_lsel = st.session_state.get('logo_variant', 'white') == _lvar
-                        if st.button(
-                            _var_labels[_lvar],
-                            key=f"logo_var_btn_{_lvar}",
-                            type="primary" if _is_lsel else "secondary",
-                            use_container_width=True,
-                        ):
-                            st.session_state['logo_variant']      = _lvar
-                            st.session_state['logo_custom_bytes'] = None
-                            st.rerun()
-                with _lcols[-1]:
-                    st.markdown("**Logo propio**")
-                    _cust_up = st.file_uploader(
-                        "Subir", type=['png', 'jpg', 'jpeg'],
-                        key="logo_custom_uploader",
-                        label_visibility="collapsed",
-                    )
-                    if _cust_up:
-                        from PIL import Image as _PIL_logo
-                        _cl = _PIL_logo.open(io.BytesIO(_cust_up.read())).convert('RGBA')
-                        _cb = io.BytesIO()
-                        _cl.save(_cb, format='PNG')
-                        st.session_state['logo_custom_bytes'] = _cb.getvalue()
-                        st.session_state['logo_variant']      = 'custom'
-                        st.success("Logo cargado ✓")
-                    if st.session_state.get('logo_variant') == 'custom':
-                        st.caption("✅ Logo propio activo")
-                        if st.button("🗑️ Quitar", key="btn_rm_custom_logo"):
-                            st.session_state.pop('logo_custom_bytes', None)
-                            st.session_state['logo_variant'] = 'white'
-                            st.rerun()
-
-            with _lc2:
-                st.markdown("**Posición**")
-                _pos_opts = {
-                    '↘ Inferior derecha': 'bottom-right',
-                    '↙ Inferior izquierda': 'bottom-left',
-                    '↗ Superior derecha': 'top-right',
-                    '↖ Superior izquierda': 'top-left',
-                    '🔲 Centro': 'center',
-                }
-                _pos_sel = st.selectbox(
-                    "Posición",
-                    list(_pos_opts.keys()),
-                    index=0,
-                    key="logo_position_sel",
-                    label_visibility="collapsed",
-                )
-                st.session_state['logo_position'] = _pos_opts[_pos_sel]
-
-                st.markdown("**Tamaño**")
-                _pct_val = st.slider(
-                    "Tamaño (%)", min_value=8, max_value=40,
-                    value=int(st.session_state.get('logo_pct', 0.20) * 100),
-                    step=2, key="logo_pct_slider",
-                )
-                st.session_state['logo_pct'] = _pct_val / 100
-
-                _logo_on = st.toggle(
-                    "Incluir logo en imágenes generadas",
-                    value=st.session_state.get('logo_enabled', True),
-                    key="logo_enabled_toggle",
-                )
-                st.session_state['logo_enabled'] = _logo_on
 
         # ── Generador de Carrusel ──────────────────────────────────────────────
         with st.expander("🎠 Generador de Carrusel", expanded=False):
@@ -2621,7 +2619,6 @@ def show_parrilla():
                             _fp = f"{_sl['escena']}\n\n{_master}" if _master else _sl['escena']
                             try:
                                 _sb = _generate_imagen(_fp, '1:1', _car_q)
-                                _sb = _composite_logo(_sb, brand)
                                 _car_imgs.append({
                                     'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
                                     'titulo': _sl.get('titulo_slide',''), 'bytes': _sb,
@@ -2658,6 +2655,16 @@ def show_parrilla():
                                         use_container_width=True,
                                         key=f"btn_dl_sl_{_gsl['numero']}",
                                     )
+                                    _logo_res_sl = _logo_adder_ui(
+                                        f"car_{_car_imgs_key}_sl{_gsl['numero']}",
+                                        _gsl['bytes'], brand,
+                                    )
+                                    if _logo_res_sl is not None:
+                                        for _upd in st.session_state[_car_imgs_key]:
+                                            if _upd['numero'] == _gsl['numero']:
+                                                _upd['bytes'] = _logo_res_sl
+                                                break
+                                        st.rerun()
                                     _edit_open = st.session_state.get(_car_edit_key) == _gsl['numero']
                                     _btn_lbl = "✏️ Cerrar editor" if _edit_open else "✏️ Editar slide"
                                     if st.button(_btn_lbl, key=f"btn_edit_sl_{_gsl['numero']}", use_container_width=True):
@@ -2679,7 +2686,6 @@ def show_parrilla():
                                                 with st.spinner("Editando con IA…"):
                                                     try:
                                                         _new_bytes = _edit_imagen_gemini(_gsl['bytes'], _edit_inst.strip())
-                                                        _new_bytes = _composite_logo(_new_bytes, brand)
                                                         for _upd in st.session_state[_car_imgs_key]:
                                                             if _upd['numero'] == _gsl['numero']:
                                                                 _upd['bytes'] = _new_bytes
@@ -2958,7 +2964,6 @@ def show_parrilla():
                             with st.spinner(f"Generando… ({_spin_lbl.get(_quality, '20-40')} segundos)"):
                                 try:
                                     _img_bytes = _generate_imagen(_prompt_gen, _aspect4, _quality)
-                                    _img_bytes = _composite_logo(_img_bytes, brand)
                                     st.session_state[_img4_cache] = {
                                         'bytes': _img_bytes,
                                         'aspect': _aspect_lbl,
@@ -2991,6 +2996,10 @@ def show_parrilla():
                                     use_container_width=True,
                                     key="btn_dl_imagen4",
                                 )
+                                _logo_res_img4 = _logo_adder_ui(f"img4_{_img4_cache}", _cur_bytes, brand)
+                                if _logo_res_img4 is not None:
+                                    _edit_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_img4})
+                                    st.rerun()
 
                             with _col_ctrl_ed:
                                 st.markdown("#### ✏️ Editar imagen con IA")
