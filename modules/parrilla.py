@@ -2,6 +2,7 @@
 
 import os
 import json
+import base64
 import calendar as cal_mod
 from datetime import date
 from pathlib import Path
@@ -304,9 +305,42 @@ def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20):
     return out.getvalue()
 
 
+def _edit_imagen_gemini(image_bytes, instruction):
+    """Send image + text instruction to Gemini image editing model. Returns PNG bytes."""
+    import urllib.request
+    key = _get_gemini_key()
+    img_b64 = base64.b64encode(image_bytes).decode()
+    url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+           f'gemini-2.0-flash-preview-image-generation:generateContent?key={key}')
+    body = json.dumps({
+        'contents': [{
+            'parts': [
+                {'inlineData': {'mimeType': 'image/png', 'data': img_b64}},
+                {'text': instruction},
+            ]
+        }],
+        'generationConfig': {'responseModalities': ['IMAGE', 'TEXT']},
+    }).encode()
+    req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+    resp = urllib.request.urlopen(req, timeout=180)
+    data = json.loads(resp.read())
+    parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+    for p in parts:
+        if 'inlineData' in p:
+            raw = base64.b64decode(p['inlineData']['data'])
+            # Normalize to PNG
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(raw)).convert('RGB')
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            return buf.getvalue()
+    raise RuntimeError('El modelo no devolvió imagen editada. Intenta con otra instrucción.')
+
+
 def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
     """Generates an image and returns raw image bytes."""
-    import urllib.request, base64
+    import urllib.request
     key = _get_gemini_key()
 
     if quality == 'nano_banana':
@@ -2396,8 +2430,11 @@ def show_parrilla():
 
                         _img4_err = st.empty()
 
+                        _edit_hist_key = f"img4_edits_{_img4_cache}"
+
                         if _gen_img:
                             st.session_state.pop(_img4_cache, None)
+                            st.session_state.pop(_edit_hist_key, None)
                             _spin_lbl = {"fast": "10-15", "standard": "20-30", "ultra": "35-50", "nano_banana": "30-60"}
                             with st.spinner(f"Generando… ({_spin_lbl.get(_quality, '20-40')} segundos)"):
                                 try:
@@ -2411,16 +2448,85 @@ def show_parrilla():
                                     _img4_err.error(f"Error al generar imagen: {_e}")
 
                         if _img4_cache in st.session_state:
-                            _saved = st.session_state[_img4_cache]
-                            st.image(_saved['bytes'], use_container_width=True)
+                            _saved      = st.session_state[_img4_cache]
+                            _edit_hist  = st.session_state.setdefault(_edit_hist_key, [])
+                            _cur_bytes  = _edit_hist[-1]['bytes'] if _edit_hist else _saved['bytes']
+                            _ver_num    = len(_edit_hist) + 1
+
                             _fecha_dl = str(sel_row.get('Fecha', ''))
                             _tema_dl  = str(sel_row.get('Tema', ''))[:30].replace(' ', '_')
-                            _fname    = f"imagen_{meta.get('marca','').replace(' ','_')}_{_fecha_dl}_{_tema_dl}.png"
-                            st.download_button(
-                                "📥  Descargar imagen (.png)",
-                                data=_saved['bytes'],
-                                file_name=_fname,
-                                mime="image/png",
-                                use_container_width=True,
-                                key="btn_dl_imagen4",
-                            )
+                            _fname_base = f"imagen_{meta.get('marca','').replace(' ','_')}_{_fecha_dl}_{_tema_dl}"
+
+                            st.markdown("---")
+                            _col_img_ed, _col_ctrl_ed = st.columns([1, 1], gap="large")
+
+                            with _col_img_ed:
+                                st.image(_cur_bytes, use_container_width=True)
+                                if _edit_hist:
+                                    st.caption(f"Versión {_ver_num} · {len(_edit_hist)} edición(es) aplicada(s)")
+                                st.download_button(
+                                    f"📥 Descargar v{_ver_num} (.png)",
+                                    data=_cur_bytes,
+                                    file_name=f"{_fname_base}_v{_ver_num}.png",
+                                    mime="image/png",
+                                    use_container_width=True,
+                                    key="btn_dl_imagen4",
+                                )
+
+                            with _col_ctrl_ed:
+                                st.markdown("#### ✏️ Editar imagen con IA")
+                                st.caption(
+                                    "Describe qué quieres cambiar. "
+                                    "Cada edición genera una nueva versión."
+                                )
+
+                                _edit_instr = st.text_area(
+                                    "Instrucción de edición",
+                                    placeholder=(
+                                        "Ej: Agrega más vegetación en primer plano\n"
+                                        "Cambia el cielo a atardecer\n"
+                                        "Quita los vehículos y deja solo la infraestructura\n"
+                                        "Hace la escena más nocturna con iluminación azul"
+                                    ),
+                                    height=130,
+                                    key="img4_edit_instr",
+                                )
+
+                                _col_apply, _col_undo = st.columns([3, 1])
+                                with _col_apply:
+                                    _apply_edit = st.button(
+                                        "🪄 Aplicar edición",
+                                        type="primary",
+                                        use_container_width=True,
+                                        disabled=not _edit_instr.strip(),
+                                        key="btn_apply_edit",
+                                    )
+                                with _col_undo:
+                                    _can_undo = bool(_edit_hist)
+                                    if st.button(
+                                        "↩️",
+                                        use_container_width=True,
+                                        disabled=not _can_undo,
+                                        key="btn_undo_edit",
+                                        help="Deshacer última edición",
+                                    ):
+                                        _edit_hist.pop()
+                                        st.rerun()
+
+                                if _edit_hist:
+                                    st.markdown("**Historial de ediciones:**")
+                                    for _ei, _eh in enumerate(_edit_hist):
+                                        st.caption(f"v{_ei+2}: {_eh['instruction'][:70]}")
+
+                                if _apply_edit and _edit_instr.strip():
+                                    _edit_err_ph = st.empty()
+                                    with st.spinner("Aplicando edición… (15-30 segundos)"):
+                                        try:
+                                            _edited = _edit_imagen_gemini(_cur_bytes, _edit_instr.strip())
+                                            _edit_hist.append({
+                                                'instruction': _edit_instr.strip(),
+                                                'bytes': _edited,
+                                            })
+                                            st.rerun()
+                                        except Exception as _ee:
+                                            _edit_err_ph.error(f"Error al editar: {_ee}")
