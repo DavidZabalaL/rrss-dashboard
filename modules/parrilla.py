@@ -317,21 +317,14 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     """
     Inline logo overlay widget. Returns composited PNG bytes when Apply is clicked, else None.
     key_prefix must be unique per widget instance.
+    Uses st.toggle + st.radio so that opening/selecting variants does NOT call st.rerun()
+    and therefore does not reset the active Streamlit tab.
     """
     _open_key = f"_la_open_{key_prefix}"
-    _var_key  = f"_la_var_{key_prefix}"
-    _pos_key  = f"_la_pos_{key_prefix}"
-    _pct_key  = f"_la_pct_{key_prefix}"
     _cust_key = f"_la_cust_{key_prefix}"
-    _is_open  = st.session_state.get(_open_key, False)
 
-    if st.button(
-        "🏷️ Cerrar" if _is_open else "🏷️ Agregar logo",
-        key=f"_la_toggle_{key_prefix}",
-        use_container_width=True,
-    ):
-        st.session_state[_open_key] = not _is_open
-        st.rerun()
+    # st.toggle manages its state automatically — no st.rerun() needed to open/close
+    _is_open = st.toggle("🏷️ Agregar logo", key=_open_key)
 
     if not _is_open:
         return None
@@ -341,24 +334,25 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     _avail_vars = [v for v in ('white', 'color') if (_logo_dir / f'{v}.png').exists()]
     _var_labels = {'white': '⬜ Blanco', 'color': '🎨 Color'}
     _has_custom = bool(st.session_state.get(_cust_key))
-    _cur_var    = st.session_state.get(_var_key, _avail_vars[0] if _avail_vars else 'white')
 
+    # Show logo thumbnails
     if _avail_vars:
-        _vcols = st.columns(len(_avail_vars))
+        _thumb_cols = st.columns(len(_avail_vars))
         for _vi, _vv in enumerate(_avail_vars):
-            with _vcols[_vi]:
-                st.image(str(_logo_dir / f'{_vv}.png'), use_container_width=True)
-                _is_sel = (_cur_var == _vv) and not _has_custom
-                if st.button(
-                    _var_labels[_vv],
-                    key=f"_la_vbtn_{key_prefix}_{_vv}",
-                    type="primary" if _is_sel else "secondary",
-                    use_container_width=True,
-                ):
-                    st.session_state[_var_key]  = _vv
-                    st.session_state[_cust_key] = None
-                    st.rerun()
+            _thumb_cols[_vi].image(str(_logo_dir / f'{_vv}.png'), use_container_width=True)
 
+        if not _has_custom:
+            # st.radio stores selection in session state automatically — no st.rerun() needed
+            st.radio(
+                "Variante",
+                _avail_vars,
+                format_func=lambda v: _var_labels.get(v, v),
+                key=f"_la_var_{key_prefix}",
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+
+    # Custom logo uploader
     _cust_up = st.file_uploader(
         "O sube tu propio logo (PNG/JPG)",
         type=['png', 'jpg', 'jpeg'],
@@ -371,7 +365,6 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             _cl = _PIL_la.open(io.BytesIO(_raw)).convert('RGBA')
             _cb = io.BytesIO(); _cl.save(_cb, format='PNG')
             st.session_state[_cust_key] = _cb.getvalue()
-            st.session_state[_var_key]  = 'custom'
             _has_custom = True
 
     if _has_custom:
@@ -379,10 +372,10 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
         _hc1.caption("✅ Logo propio activo")
         with _hc2:
             if st.button("🗑️", key=f"_la_rmcust_{key_prefix}", help="Quitar logo propio"):
-                st.session_state[_cust_key] = None
-                st.session_state[_var_key]  = _avail_vars[0] if _avail_vars else 'white'
-                st.rerun()
+                st.session_state.pop(_cust_key, None)
+                # Natural rerun from button click updates UI — no st.rerun()
 
+    # Position
     _pos_opts = {
         '↘ Inf. derecha':   'bottom-right',
         '↙ Inf. izquierda': 'bottom-left',
@@ -390,29 +383,27 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
         '↖ Sup. izquierda': 'top-left',
         '🔲 Centro':         'center',
     }
-    _cur_pos     = st.session_state.get(_pos_key, 'bottom-right')
-    _cur_pos_lbl = next((k for k, v in _pos_opts.items() if v == _cur_pos), '↘ Inf. derecha')
-    _sel_pos_lbl = st.selectbox(
+    _sel_pos = st.selectbox(
         "Posición",
         list(_pos_opts.keys()),
-        index=list(_pos_opts.keys()).index(_cur_pos_lbl),
         key=f"_la_pos_sel_{key_prefix}",
     )
-    st.session_state[_pos_key] = _pos_opts[_sel_pos_lbl]
 
-    _cur_pct = int(st.session_state.get(_pct_key, 20))
+    # Size
     _pct_val = st.slider(
         "Tamaño del logo (%)", min_value=8, max_value=40,
-        value=_cur_pct, step=2,
+        value=20, step=2,
         key=f"_la_pct_sl_{key_prefix}",
     )
-    st.session_state[_pct_key] = _pct_val
 
+    # Apply — only here do we need the caller to st.rerun() (once, intentionally)
     if st.button("✅ Aplicar logo", key=f"_la_apply_{key_prefix}", type="primary", use_container_width=True):
-        _final_var  = st.session_state.get(_var_key, 'white')
-        _final_pos  = st.session_state.get(_pos_key, 'bottom-right')
-        _final_pct  = st.session_state.get(_pct_key, 20) / 100
-        _final_cust = st.session_state.get(_cust_key)
+        _final_var  = st.session_state.get(f"_la_var_{key_prefix}", _avail_vars[0] if _avail_vars else 'white')
+        if _has_custom:
+            _final_var = 'white'  # variant ignored when custom bytes provided
+        _final_pos  = _pos_opts.get(_sel_pos, 'bottom-right')
+        _final_pct  = _pct_val / 100
+        _final_cust = st.session_state.get(_cust_key) if _has_custom else None
         try:
             _result = _composite_logo(
                 img_bytes, brand,
@@ -421,7 +412,7 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
                 logo_variant=_final_var,
                 custom_logo_bytes=_final_cust,
             )
-            st.session_state[_open_key] = False
+            st.session_state[_open_key] = False  # close toggle on next rerun
             return _result
         except Exception as _le:
             st.error(f"Error al aplicar logo: {_le}")
@@ -2465,7 +2456,7 @@ def show_parrilla():
                         use_container_width=True,
                         key="btn_dl_upload",
                     )
-                    _logo_res_up = _logo_adder_ui(f"up_editor_{id(_up_cache)}", _up_current, brand)
+                    _logo_res_up = _logo_adder_ui("up_editor_main", _up_current, brand)
                     if _logo_res_up is not None:
                         _up_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_up})
                         st.rerun()
