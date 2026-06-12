@@ -197,12 +197,18 @@ def _ai_provider():
         return 'gemini'
 
 
-def _generate_imagen4(prompt_text, aspect_ratio='16:9'):
-    """Generates an image with Imagen 4 Fast and returns raw PNG bytes."""
+def _generate_imagen4(prompt_text, aspect_ratio='16:9', quality='standard'):
+    """Generates an image with Imagen 4 and returns raw PNG bytes."""
     import urllib.request, base64
     key = _get_gemini_key()
+    _model_map = {
+        'fast':     'imagen-4.0-fast-generate-001',
+        'standard': 'imagen-4.0-generate-001',
+        'ultra':    'imagen-4.0-ultra-generate-001',
+    }
+    model = _model_map.get(quality, 'imagen-4.0-generate-001')
     url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
-           f'imagen-4.0-fast-generate-001:predict?key={key}')
+           f'{model}:predict?key={key}')
     body = json.dumps({
         'instances': [{'prompt': prompt_text}],
         'parameters': {'sampleCount': 1, 'aspectRatio': aspect_ratio},
@@ -2169,26 +2175,38 @@ def show_parrilla():
                             _aspect4    = '16:9' if 'LinkedIn' in _asp_sel else '1:1'
                             _aspect_lbl = _asp_sel
 
-                        _col_gen, _col_info = st.columns([3, 2])
-                        with _col_info:
-                            st.caption(f"Formato: **{_aspect_lbl}** · Modelo: Imagen 4 Fast")
-
-                        with _col_gen:
-                            _gen_img = st.button(
-                                "🎨  Generar imagen con Imagen 4",
-                                type="primary",
-                                use_container_width=True,
-                                key="btn_gen_imagen4",
-                                disabled=not _prompt_gen,
+                        _col_qual, _col_info = st.columns([3, 2])
+                        with _col_qual:
+                            _quality_sel = st.radio(
+                                "Calidad",
+                                ["⚡ Rápida", "⭐ Estándar", "💎 Ultra"],
+                                index=1,
+                                horizontal=True,
+                                key="img4_quality",
                             )
+                        _quality_map = {"⚡ Rápida": "fast", "⭐ Estándar": "standard", "💎 Ultra": "ultra"}
+                        _quality     = _quality_map[_quality_sel]
+
+                        with _col_info:
+                            _time_est = {"fast": "~10 seg", "standard": "~20 seg", "ultra": "~40 seg"}
+                            st.caption(f"Formato: **{_aspect_lbl}** · {_time_est[_quality]}")
+
+                        _gen_img = st.button(
+                            "🎨  Generar imagen con Imagen 4",
+                            type="primary",
+                            use_container_width=True,
+                            key="btn_gen_imagen4",
+                            disabled=not _prompt_gen,
+                        )
 
                         _img4_err = st.empty()
 
                         if _gen_img:
                             st.session_state.pop(_img4_cache, None)
-                            with st.spinner("Imagen 4 está generando… (15-30 segundos)"):
+                            _spin_lbl = {"fast": "10-15", "standard": "20-30", "ultra": "35-50"}
+                            with st.spinner(f"Imagen 4 generando… ({_spin_lbl[_quality]} segundos)"):
                                 try:
-                                    _img_bytes = _generate_imagen4(_prompt_gen, _aspect4)
+                                    _img_bytes = _generate_imagen4(_prompt_gen, _aspect4, _quality)
                                     st.session_state[_img4_cache] = {
                                         'bytes': _img_bytes,
                                         'aspect': _aspect_lbl,
