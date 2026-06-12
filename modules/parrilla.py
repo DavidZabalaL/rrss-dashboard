@@ -197,6 +197,25 @@ def _ai_provider():
         return 'gemini'
 
 
+def _generate_imagen4(prompt_text, aspect_ratio='16:9'):
+    """Generates an image with Imagen 4 Fast and returns raw PNG bytes."""
+    import urllib.request, base64
+    key = _get_gemini_key()
+    url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+           f'imagen-4.0-fast-generate-001:predict?key={key}')
+    body = json.dumps({
+        'instances': [{'prompt': prompt_text}],
+        'parameters': {'sampleCount': 1, 'aspectRatio': aspect_ratio},
+    }).encode()
+    req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+    resp = urllib.request.urlopen(req, timeout=90)
+    data = json.loads(resp.read())
+    preds = data.get('predictions', [])
+    if not preds or 'bytesBase64Encoded' not in preds[0]:
+        raise RuntimeError('Imagen 4 no devolvió imagen. Intenta de nuevo.')
+    return base64.b64decode(preds[0]['bytesBase64Encoded'])
+
+
 # ── Dates ──────────────────────────────────────────────────────────────────────
 
 def _prev_month(año, mes):
@@ -662,13 +681,26 @@ def _build_image_prompt_request(row, brand, red_formato):
     label  = brand.get('label', '')
     tone   = brand.get('tone', {}).get('style', 'profesional y moderno')
     avoid  = ', '.join(brand.get('tone', {}).get('avoid', []))
+    colors = brand.get('colors', {})
+    primary   = colors.get('primary', '')
+    secondary = colors.get('secondary', '')
+    accent    = colors.get('accent', colors.get('tertiary', ''))
 
     if 'LinkedIn' in red_formato:
-        aspect = '1200×628 px (horizontal, landscape)'
+        aspect = '1200×628 px (horizontal, landscape) — aspect ratio 16:9'
     elif 'Instagram' in red_formato or 'Facebook' in red_formato:
-        aspect = '1080×1080 px (cuadrado)'
+        aspect = '1080×1080 px (cuadrado) — aspect ratio 1:1'
     else:
-        aspect = '1200×628 px (LinkedIn) y 1080×1080 px (Instagram/Facebook)'
+        aspect = '1200×628 px (LinkedIn, 16:9) y 1080×1080 px (Instagram/Facebook, 1:1)'
+
+    color_section = ''
+    if primary:
+        color_section = f"""
+PALETA DE COLOR DE MARCA (aplicar sutilmente en iluminación, pantallas, reflejos, acentos):
+- Color primario: {primary}
+- Color secundario: {secondary}
+- Color acento: {accent}
+Integra estos colores de forma natural — no de manera obvia ni forzada."""
 
     return f"""Eres un director de arte especializado en contenido B2G para sector tecnología y seguridad pública en México.
 
@@ -683,9 +715,10 @@ PUBLICACIÓN:
 - Tono de marca: {tone}
 - Evitar: {avoid}
 - Formato de imagen destino: {aspect}
+{color_section}
 
 TAREA:
-Genera dos prompts de imagen de nivel profesional para que un diseñador o el equipo de contenido pueda producir la imagen en IA generativa.
+Genera dos prompts de imagen de nivel profesional para producir la imagen en IA generativa.
 
 REGLAS:
 - Sin texto ni logos en la imagen (eso lo agrega el diseñador en post-producción)
@@ -693,6 +726,7 @@ REGLAS:
 - Preferir tecnología, profesionalismo, modernidad, entornos urbanos de México/LatAm
 - Los prompts deben ser en INGLÉS (mejor resultado en ambas herramientas)
 - Estilo coherente con sector seguridad pública y tecnología
+- Reflejar visualmente la paleta de color de la marca
 
 Responde SOLO con JSON válido, sin texto antes ni después:
 {{
@@ -702,7 +736,7 @@ Responde SOLO con JSON válido, sin texto antes ni después:
     "notas": "(1 frase de consejo para usar en ChatGPT)"
   }},
   "gemini": {{
-    "prompt": "(100-180 palabras en inglés, optimizado para Gemini Imagen: descriptivo y directo)",
+    "prompt": "(100-180 palabras en inglés, optimizado para Gemini Imagen: descriptivo y directo, incluye colores de marca)",
     "notas": "(1 frase de consejo para usar en Gemini)"
   }}
 }}"""
@@ -2104,3 +2138,75 @@ def show_parrilla():
 - *"Cambia el fondo a azul oscuro"*
 - *"Versión sin personas, solo tecnología"*
 """)
+
+                        # ── Generación directa con Imagen 4 ───────────────
+                        st.markdown("---")
+                        st.markdown("### 🖼️ Generar imagen aquí con Imagen 4")
+                        st.caption(
+                            "Usa el prompt de Gemini como base para generar la imagen directamente. "
+                            "Descárgala y úsala en tu diseño."
+                        )
+
+                        _prompt_gen = result.get('gemini', {}).get('prompt', '')
+                        _img4_cache = f"img4_{cache_key}"
+
+                        # Aspect ratio selector si es "Ambos"
+                        if 'LinkedIn' in red_img:
+                            _aspect4 = '16:9'
+                            _aspect_lbl = 'LinkedIn 16:9'
+                        elif 'Instagram' in red_img or 'Facebook' in red_img:
+                            _aspect4 = '1:1'
+                            _aspect_lbl = 'Instagram/Facebook 1:1'
+                        else:
+                            _col_asp, _ = st.columns([2, 3])
+                            with _col_asp:
+                                _asp_sel = st.radio(
+                                    "Formato a generar",
+                                    ["LinkedIn (16:9)", "Instagram (1:1)"],
+                                    horizontal=True,
+                                    key="img4_aspect_sel",
+                                )
+                            _aspect4    = '16:9' if 'LinkedIn' in _asp_sel else '1:1'
+                            _aspect_lbl = _asp_sel
+
+                        _col_gen, _col_info = st.columns([3, 2])
+                        with _col_info:
+                            st.caption(f"Formato: **{_aspect_lbl}** · Modelo: Imagen 4 Fast")
+
+                        with _col_gen:
+                            _gen_img = st.button(
+                                "🎨  Generar imagen con Imagen 4",
+                                type="primary",
+                                use_container_width=True,
+                                key="btn_gen_imagen4",
+                                disabled=not _prompt_gen,
+                            )
+
+                        _img4_err = st.empty()
+
+                        if _gen_img:
+                            st.session_state.pop(_img4_cache, None)
+                            with st.spinner("Imagen 4 está generando… (15-30 segundos)"):
+                                try:
+                                    _img_bytes = _generate_imagen4(_prompt_gen, _aspect4)
+                                    st.session_state[_img4_cache] = {
+                                        'bytes': _img_bytes,
+                                        'aspect': _aspect_lbl,
+                                    }
+                                except Exception as _e:
+                                    _img4_err.error(f"Error al generar imagen: {_e}")
+
+                        if _img4_cache in st.session_state:
+                            _saved = st.session_state[_img4_cache]
+                            st.image(_saved['bytes'], use_container_width=True)
+                            _fecha_dl = str(sel_row.get('Fecha', ''))
+                            _tema_dl  = str(sel_row.get('Tema', ''))[:30].replace(' ', '_')
+                            _fname    = f"imagen_{meta.get('marca','').replace(' ','_')}_{_fecha_dl}_{_tema_dl}.png"
+                            st.download_button(
+                                "📥  Descargar imagen (.png)",
+                                data=_saved['bytes'],
+                                file_name=_fname,
+                                mime="image/png",
+                                use_container_width=True,
+                                key="btn_dl_imagen4",
+                            )
