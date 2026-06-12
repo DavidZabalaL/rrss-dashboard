@@ -22,6 +22,75 @@ MESES_ES = {
     7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre',
 }
 
+_MASTER_PROMPTS = {
+    'isometric': (
+        "PREMIUM ISOMETRIC SMART-CITY DIORAMA. Ultra-clean corporate technology visualization. "
+        "Photorealistic miniature world built as a highly detailed architectural scale model. "
+        "Floating rounded platform with premium chamfered edges and integrated blue accent lighting. "
+        "Product-render presentation aesthetic. High-end executive showcase quality. "
+        "Apple keynote product visualization style. Luxury industrial design language. "
+        "Architectural model presentation. Realistic urban planning geometry. "
+        "Highly detailed roads, sidewalks, landscaping, infrastructure, buildings and public spaces. "
+        "Technology naturally integrated into the environment. Infrastructure-first design philosophy. "
+        "Connected systems represented through physical infrastructure and architectural elements. "
+        "Elegant blue, cyan and white lighting accents. Subtle integrated illumination throughout the environment. "
+        "Premium smart-city aesthetic. Clean and organized composition. Balanced visual hierarchy. "
+        "Generous negative space around the platform. "
+        "Realistic scale and proportions. Photorealistic vehicles, vegetation, buildings and infrastructure. "
+        "Physically accurate materials. PBR materials. Ray-traced reflections. Global illumination. "
+        "Soft ambient occlusion. Photorealistic shadows. Ultra-detailed surface textures. "
+        "Octane Render quality. Unreal Engine 5 quality. Cinema 4D product-render quality. 8K. "
+        "Hyperrealistic. Miniature-world realism. Corporate technology showcase aesthetic. "
+        "NO cyberpunk. NO sci-fi interfaces. NO holograms. NO floating dashboards. "
+        "NO augmented reality overlays. NO futuristic fantasy architecture. NO excessive glow. "
+        "NO visual clutter. NO visual noise. NO text. NO logos. NO watermarks."
+    ),
+    'cards': (
+        "PREMIUM CORPORATE SECURITY TECHNOLOGY VISUALIZATION. Ultra-clean enterprise marketing aesthetic. "
+        "Photorealistic commercial advertising style. Real-world environments combined with premium 3D technology elements. "
+        "White and light gray minimalist composition. Large negative space. Executive presentation quality. "
+        "Hero technology device prominently displayed. Elegant blue technology accents. "
+        "Glowing blue circuit pathways connecting devices, infrastructure, vehicles and people. "
+        "Premium floating information panels. Minimalist UI cards. Clean information hierarchy. "
+        "Luxury technology marketing design. Apple enterprise presentation aesthetic. "
+        "Verkada, Motorola Solutions and Genetec visual language. Professional corporate advertising composition. "
+        "Photorealistic vehicles, people, buildings and infrastructure. Physically accurate materials. "
+        "PBR rendering. Ray-traced reflections. Global illumination. Soft ambient occlusion. "
+        "Photorealistic shadows. Realistic reflections on pavement, glass and vehicles. Ultra detailed. "
+        "Commercial photography quality. Octane Render quality. Unreal Engine 5 quality. "
+        "Cinema 4D product-render quality. 8K. Hyperrealistic. Blue, white, gray and black color palette. "
+        "NO cyberpunk. NO holograms. NO sci-fi interfaces. NO floating dashboards. "
+        "NO augmented reality overlays. NO fantasy technology. NO excessive glow. "
+        "NO visual clutter. NO gaming aesthetic. NO visual noise. NO logos. NO watermarks."
+    ),
+    'infographic': (
+        "PREMIUM SMART CITY DIGITAL TWIN VISUALIZATION. Ultra-clean executive technology presentation. "
+        "Hyperrealistic city environment blended with elegant operational data visualization. "
+        "White and light gray corporate aesthetic. Clean composition with large negative space. "
+        "Glassmorphism UI cards with subtle transparency and soft blur. "
+        "Floating information panels integrated naturally into the scene. "
+        "Premium command-and-control visual language. Connected infrastructure represented through "
+        "glowing blue pathways, location markers and operational flows. "
+        "Realistic vehicles, emergency units, operators, cameras, sensors and urban infrastructure. "
+        "High-end public safety and smart-city branding aesthetic. Photorealistic city environments. "
+        "Architectural realism. Soft atmospheric depth. Elegant blue accent lighting. "
+        "Executive infographic quality. Apple enterprise presentation aesthetic. Digital twin city visualization. "
+        "Physically accurate materials. PBR rendering. Global illumination. Ray-traced reflections. "
+        "Soft shadows. Commercial photography quality. Octane Render quality. Unreal Engine 5 quality. "
+        "Cinema 4D product-render quality. Ultra detailed. 8K. Hyperrealistic. "
+        "NO cyberpunk. NO holograms. NO sci-fi interfaces. NO floating dashboards. "
+        "NO fantasy technology. NO excessive glow. NO visual clutter. NO gaming aesthetic. "
+        "NO visual noise. NO dark military aesthetic. NO logos. NO watermarks."
+    ),
+}
+
+_STYLE_OPTIONS = {
+    '🏙️ Isométrico':  'isometric',
+    '🃏 Cards':        'cards',
+    '📊 Infografía':   'infographic',
+    '✏️ Libre':        'libre',
+}
+
 OBJETIVOS_PRESET = [
     "Posicionamiento y liderazgo en el sector seguridad pública",
     "Generación de interés y leads en nuevos territorios",
@@ -736,7 +805,7 @@ Modifiqué los posts del 7 y 14 de julio para enfocarlos en Educación Técnica 
 
 # ── Image Prompt Builder ───────────────────────────────────────────────────────
 
-def _build_image_prompt_request(row, brand, red_formato):
+def _build_image_prompt_request(row, brand, red_formato, style='libre'):
     tema   = str(row.get('Tema', ''))
     pilar  = str(row.get('Pilar', ''))
     arte   = str(row.get('Arte Sugerida', ''))
@@ -768,6 +837,28 @@ PALETA DE COLOR DE MARCA (aplicar sutilmente en iluminación, pantallas, reflejo
 - Color acento: {accent}
 Integra estos colores de forma natural — no de manera obvia ni forzada."""
 
+    _style_names = {
+        'isometric':   'Isométrico (diorama miniatura de ciudad inteligente)',
+        'cards':       'Cards corporativo (tecnología hero + entorno real)',
+        'infographic': 'Infografía de ciudad inteligente (digital twin + datos operativos)',
+    }
+
+    if style in _style_names:
+        style_section = f"""
+ESTILO VISUAL SELECCIONADO: {_style_names[style]}
+IMPORTANTE: El master prompt de estilo (calidad técnica, materiales, iluminación, restricciones) ya está definido.
+Tu tarea es generar ÚNICAMENTE la descripción de escena específica de este post:
+- Qué elementos, sujetos u objetos concretos aparecen (tecnología, personas, vehículos, infraestructura)
+- La acción o narrativa visual que representa el tema
+- La composición y plano (primer plano, vista aérea, panorámica, etc.)
+- El ambiente o entorno (ciudad, centro de mando, carretera, edificio gubernamental, etc.)
+- Cómo se integran los colores de marca en la escena
+NO incluyas referencias a estilo de renderizado, calidad técnica, ni listas de "NO X" — eso lo maneja el master prompt."""
+        prompt_word_range = "80-140 palabras en inglés"
+    else:
+        style_section = ""
+        prompt_word_range = "150-250 palabras en inglés, muy detallado: sujeto, composición, iluminación, paleta, estilo, ambiente, acabado técnico"
+
     return f"""Eres un director de arte especializado en contenido B2G para sector tecnología y seguridad pública en México.
 
 PUBLICACIÓN:
@@ -782,27 +873,24 @@ PUBLICACIÓN:
 - Evitar: {avoid}
 - Formato de imagen destino: {aspect}
 {color_section}
+{style_section}
 
-TAREA:
-Genera dos prompts de imagen de nivel profesional para producir la imagen en IA generativa.
-
-REGLAS:
-- Sin texto ni logos en la imagen (eso lo agrega el diseñador en post-producción)
+REGLAS GENERALES:
+- Sin texto ni logos en la imagen
 - Evitar imágenes de conflicto, violencia o armas
 - Preferir tecnología, profesionalismo, modernidad, entornos urbanos de México/LatAm
-- Los prompts deben ser en INGLÉS (mejor resultado en ambas herramientas)
-- Estilo coherente con sector seguridad pública y tecnología
+- Los prompts deben ser en INGLÉS
 - Reflejar visualmente la paleta de color de la marca
 
 Responde SOLO con JSON válido, sin texto antes ni después:
 {{
-  "descripcion_corta": "(15 palabras máximo describiendo la imagen)",
+  "descripcion_corta": "(15 palabras máximo describiendo la imagen en español)",
   "dalle3": {{
-    "prompt": "(150-250 palabras en inglés, muy detallado: sujeto, composición, iluminación, paleta, estilo, ambiente, acabado técnico)",
+    "prompt": "({prompt_word_range})",
     "notas": "(1 frase de consejo para usar en ChatGPT)"
   }},
   "gemini": {{
-    "prompt": "(100-180 palabras en inglés, optimizado para Gemini Imagen: descriptivo y directo, incluye colores de marca)",
+    "prompt": "(80-140 palabras en inglés, descriptivo y directo, incluye colores de marca)",
     "notas": "(1 frase de consejo para usar en Gemini)"
   }}
 }}"""
@@ -2110,15 +2198,43 @@ def show_parrilla():
                         key="img_prompt_red",
                     )
 
+                st.markdown("**Estilo visual**")
+                _style_cols = st.columns(len(_STYLE_OPTIONS))
+                _style_sel_key = "img_style_sel"
+                if _style_sel_key not in st.session_state:
+                    st.session_state[_style_sel_key] = '🏙️ Isométrico'
+                for _i, (_slabel, _sval) in enumerate(_STYLE_OPTIONS.items()):
+                    with _style_cols[_i]:
+                        _is_active = st.session_state[_style_sel_key] == _slabel
+                        if st.button(
+                            _slabel,
+                            key=f"style_btn_{_sval}",
+                            use_container_width=True,
+                            type="primary" if _is_active else "secondary",
+                        ):
+                            st.session_state[_style_sel_key] = _slabel
+                            st.rerun()
+
+                _style_sel   = st.session_state.get(_style_sel_key, '🏙️ Isométrico')
+                _style_value = _STYLE_OPTIONS.get(_style_sel, 'libre')
+
+                _style_desc = {
+                    'isometric':   '🏙️ Diorama miniatura de ciudad inteligente con plataforma flotante y luces azules',
+                    'cards':       '🃏 Dispositivo hero con entorno real fotorrealista y paneles de datos flotantes',
+                    'infographic': '📊 Ciudad digital twin con visualización de datos operativos y glassmorphism',
+                    'libre':       '✏️ El asistente define el estilo completo basado en el brief de marca',
+                }
+                st.caption(_style_desc.get(_style_value, ''))
+
                 _img_error_ph = st.empty()
 
                 if st.button("✨  Generar Prompts de Imagen", type="primary",
                              use_container_width=True, key="btn_gen_img_prompt"):
-                    cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}"
+                    cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}_{_style_value}"
                     st.session_state.pop(cache_key, None)
                     _img_error_ph.empty()
 
-                    prompt_req = _build_image_prompt_request(sel_row, brand, red_img)
+                    prompt_req = _build_image_prompt_request(sel_row, brand, red_img, _style_value)
                     _ai_lbl_img = "Gemini" if _ai_provider() == 'gemini' else "Claude"
                     _spin_ph = st.empty()
                     with _spin_ph:
@@ -2142,7 +2258,7 @@ def show_parrilla():
                     _spin_ph.empty()
 
                 # Mostrar resultado
-                cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}"
+                cache_key = f"img_prompts_{meta.get('marca','')}_{sel_lbl}_{red_img}_{_style_value}"
                 if cache_key in st.session_state:
                     result = st.session_state[cache_key]
                     if 'error' in result:
@@ -2152,8 +2268,9 @@ def show_parrilla():
                                 st.text(result['raw'])
                     else:
                         desc = result.get('descripcion_corta', '')
+                        _style_badge = '' if _style_value == 'libre' else f" · Estilo: **{_style_sel}**"
                         if desc:
-                            st.markdown(f"**Imagen:** {desc}")
+                            st.markdown(f"**Imagen:** {desc}{_style_badge}")
                         st.markdown("---")
 
                         col_dalle, col_gemini = st.columns(2)
@@ -2162,29 +2279,35 @@ def show_parrilla():
                             st.markdown("### 🤖 DALL-E 3 · ChatGPT")
                             dalle = result.get('dalle3', {})
                             prompt_text = dalle.get('prompt', '')
+                            _full_dalle = f"{prompt_text}\n\n{_MASTER_PROMPTS[_style_value]}" if _style_value in _MASTER_PROMPTS else prompt_text
                             st.text_area(
-                                "Copia y pega en ChatGPT → DALL-E 3",
-                                value=prompt_text,
+                                "Prompt completo (escena + estilo master)",
+                                value=_full_dalle,
                                 height=260,
                                 key="dalle_prompt_area",
                             )
                             notas = dalle.get('notas', '')
                             if notas:
                                 st.caption(f"💡 {notas}")
+                            if _style_value in _MASTER_PROMPTS:
+                                st.caption(f"✅ Master **{_style_sel}** incluido automáticamente")
 
                         with col_gemini:
                             st.markdown("### 🌐 Gemini Imagen · Google")
                             gemini = result.get('gemini', {})
                             prompt_text_g = gemini.get('prompt', '')
+                            _full_gemini = f"{prompt_text_g}\n\n{_MASTER_PROMPTS[_style_value]}" if _style_value in _MASTER_PROMPTS else prompt_text_g
                             st.text_area(
-                                "Copia y pega en Gemini (gemini.google.com)",
-                                value=prompt_text_g,
+                                "Prompt completo (escena + estilo master)",
+                                value=_full_gemini,
                                 height=260,
                                 key="gemini_prompt_area",
                             )
                             notas_g = gemini.get('notas', '')
                             if notas_g:
                                 st.caption(f"💡 {notas_g}")
+                            if _style_value in _MASTER_PROMPTS:
+                                st.caption(f"✅ Master **{_style_sel}** incluido automáticamente")
 
                         # Guía de uso
                         with st.expander("📖 ¿Cómo usar estos prompts?"):
@@ -2213,7 +2336,9 @@ def show_parrilla():
                             "Descárgala y úsala en tu diseño."
                         )
 
-                        _prompt_gen = result.get('gemini', {}).get('prompt', '')
+                        _scene_desc = result.get('gemini', {}).get('prompt', '')
+                        _master     = _MASTER_PROMPTS.get(_style_value, '')
+                        _prompt_gen = f"{_scene_desc}\n\n{_master}" if _master else _scene_desc
                         _img4_cache = f"img4_{cache_key}"
 
                         # Aspect ratio selector si es "Ambos"
@@ -2273,8 +2398,8 @@ def show_parrilla():
 
                         if _gen_img:
                             st.session_state.pop(_img4_cache, None)
-                            _spin_lbl = {"fast": "10-15", "standard": "20-30", "ultra": "35-50"}
-                            with st.spinner(f"Imagen 4 generando… ({_spin_lbl[_quality]} segundos)"):
+                            _spin_lbl = {"fast": "10-15", "standard": "20-30", "ultra": "35-50", "nano_banana": "30-60"}
+                            with st.spinner(f"Generando… ({_spin_lbl.get(_quality, '20-40')} segundos)"):
                                 try:
                                     _img_bytes = _generate_imagen(_prompt_gen, _aspect4, _quality)
                                     _img_bytes = _composite_logo(_img_bytes, brand)
