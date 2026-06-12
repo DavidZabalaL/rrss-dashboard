@@ -267,34 +267,67 @@ def _ai_provider():
         return 'gemini'
 
 
-def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20):
+def _logo_settings():
+    """Read logo configuration from session state with safe defaults."""
+    try:
+        return {
+            'variant':  st.session_state.get('logo_variant', 'white'),
+            'position': st.session_state.get('logo_position', 'bottom-right'),
+            'pct':      st.session_state.get('logo_pct', 0.20),
+            'custom':   st.session_state.get('logo_custom_bytes'),
+            'enabled':  st.session_state.get('logo_enabled', True),
+        }
+    except Exception:
+        return {'variant': 'white', 'position': 'bottom-right', 'pct': 0.20,
+                'custom': None, 'enabled': True}
+
+
+def _composite_logo(img_bytes, brand, position=None, logo_pct=None,
+                    logo_variant=None, custom_logo_bytes=None):
     """Overlay the brand logo on the generated image. Returns PNG bytes."""
     from PIL import Image
-    import io
 
-    brand_id   = brand.get('brand_id', '')
-    logo_path  = ROOT / 'marca' / brand_id / 'logos' / 'white.png'
-    if not logo_path.exists():
-        return img_bytes  # no logo found, return original
+    cfg = _logo_settings()
+    if not cfg['enabled']:
+        return img_bytes
+
+    _position  = position       or cfg['position']
+    _logo_pct  = logo_pct       or cfg['pct']
+    _variant   = logo_variant   or cfg['variant']
+    _custom    = custom_logo_bytes or cfg['custom']
+
+    if _custom:
+        try:
+            logo_img = Image.open(io.BytesIO(_custom)).convert('RGBA')
+        except Exception:
+            return img_bytes
+    else:
+        brand_id  = brand.get('brand_id', '')
+        logo_path = ROOT / 'marca' / brand_id / 'logos' / f'{_variant}.png'
+        if not logo_path.exists():
+            logo_path = ROOT / 'marca' / brand_id / 'logos' / 'white.png'
+        if not logo_path.exists():
+            return img_bytes
+        logo_img = Image.open(str(logo_path)).convert('RGBA')
 
     base_img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
-    logo_img = Image.open(str(logo_path)).convert('RGBA')
 
     bw, bh   = base_img.size
-    # Resize logo so its width = logo_pct of image width
-    logo_w   = int(bw * logo_pct)
+    logo_w   = int(bw * _logo_pct)
     ratio    = logo_w / logo_img.width
     logo_h   = int(logo_img.height * ratio)
     logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
 
     pad = int(bw * 0.03)
-    if position == 'bottom-right':
+    if _position == 'bottom-right':
         x = bw - logo_w - pad
         y = bh - logo_h - pad
-    elif position == 'bottom-left':
+    elif _position == 'bottom-left':
         x, y = pad, bh - logo_h - pad
-    elif position == 'top-right':
+    elif _position == 'top-right':
         x, y = bw - logo_w - pad, pad
+    elif _position == 'center':
+        x, y = (bw - logo_w) // 2, (bh - logo_h) // 2
     else:  # top-left
         x, y = pad, pad
 
@@ -2406,6 +2439,91 @@ def show_parrilla():
                             except Exception as _ue:
                                 _up_err_ph.error(f"Error al editar: {_ue}")
 
+        # ── Configuración de Logo ──────────────────────────────────────────────
+        with st.expander("🏷️ Configuración de logo", expanded=False):
+            st.caption("Estas opciones aplican a todas las imágenes generadas en esta pestaña.")
+
+            _brand_id_logo = brand.get('brand_id', '')
+            _logo_dir      = ROOT / 'marca' / _brand_id_logo / 'logos'
+            _available_vars = {
+                v: _logo_dir / f'{v}.png'
+                for v in ('white', 'color')
+                if (_logo_dir / f'{v}.png').exists()
+            }
+
+            _lc1, _lc2 = st.columns([2, 3])
+            with _lc1:
+                st.markdown("**Variante de logo**")
+                _lcols = st.columns(len(_available_vars) + 1)
+                _var_labels = {'white': '⬜ Blanco', 'color': '🎨 Color'}
+                for _li, (_lvar, _lpath) in enumerate(_available_vars.items()):
+                    with _lcols[_li]:
+                        st.image(str(_lpath), use_container_width=True)
+                        _is_lsel = st.session_state.get('logo_variant', 'white') == _lvar
+                        if st.button(
+                            _var_labels[_lvar],
+                            key=f"logo_var_btn_{_lvar}",
+                            type="primary" if _is_lsel else "secondary",
+                            use_container_width=True,
+                        ):
+                            st.session_state['logo_variant']      = _lvar
+                            st.session_state['logo_custom_bytes'] = None
+                            st.rerun()
+                with _lcols[-1]:
+                    st.markdown("**Logo propio**")
+                    _cust_up = st.file_uploader(
+                        "Subir", type=['png', 'jpg', 'jpeg'],
+                        key="logo_custom_uploader",
+                        label_visibility="collapsed",
+                    )
+                    if _cust_up:
+                        from PIL import Image as _PIL_logo
+                        _cl = _PIL_logo.open(io.BytesIO(_cust_up.read())).convert('RGBA')
+                        _cb = io.BytesIO()
+                        _cl.save(_cb, format='PNG')
+                        st.session_state['logo_custom_bytes'] = _cb.getvalue()
+                        st.session_state['logo_variant']      = 'custom'
+                        st.success("Logo cargado ✓")
+                    if st.session_state.get('logo_variant') == 'custom':
+                        st.caption("✅ Logo propio activo")
+                        if st.button("🗑️ Quitar", key="btn_rm_custom_logo"):
+                            st.session_state.pop('logo_custom_bytes', None)
+                            st.session_state['logo_variant'] = 'white'
+                            st.rerun()
+
+            with _lc2:
+                st.markdown("**Posición**")
+                _pos_opts = {
+                    '↘ Inferior derecha': 'bottom-right',
+                    '↙ Inferior izquierda': 'bottom-left',
+                    '↗ Superior derecha': 'top-right',
+                    '↖ Superior izquierda': 'top-left',
+                    '🔲 Centro': 'center',
+                }
+                _pos_sel = st.selectbox(
+                    "Posición",
+                    list(_pos_opts.keys()),
+                    index=0,
+                    key="logo_position_sel",
+                    label_visibility="collapsed",
+                )
+                st.session_state['logo_position'] = _pos_opts[_pos_sel]
+
+                st.markdown("**Tamaño**")
+                _pct_val = st.slider(
+                    "Tamaño (%)", min_value=8, max_value=40,
+                    value=int(st.session_state.get('logo_pct', 0.20) * 100),
+                    step=2, key="logo_pct_slider",
+                )
+                st.session_state['logo_pct'] = _pct_val / 100
+
+                _logo_on = st.toggle(
+                    "Incluir logo en imágenes generadas",
+                    value=st.session_state.get('logo_enabled', True),
+                    key="logo_enabled_toggle",
+                )
+                st.session_state['logo_enabled'] = _logo_on
+
         # ── Generador de Carrusel ──────────────────────────────────────────────
         with st.expander("🎠 Generador de Carrusel", expanded=False):
             st.caption(
@@ -2522,6 +2640,7 @@ def show_parrilla():
 
                     if _car_imgs_key in st.session_state:
                         _car_imgs = st.session_state[_car_imgs_key]
+                        _car_edit_key = _car_imgs_key + '_edit_slide'
                         st.markdown("---")
                         _gc = st.columns(min(3, len(_car_imgs)))
                         for _gi, _gsl in enumerate(_car_imgs):
@@ -2539,6 +2658,38 @@ def show_parrilla():
                                         use_container_width=True,
                                         key=f"btn_dl_sl_{_gsl['numero']}",
                                     )
+                                    _edit_open = st.session_state.get(_car_edit_key) == _gsl['numero']
+                                    _btn_lbl = "✏️ Cerrar editor" if _edit_open else "✏️ Editar slide"
+                                    if st.button(_btn_lbl, key=f"btn_edit_sl_{_gsl['numero']}", use_container_width=True):
+                                        if _edit_open:
+                                            st.session_state.pop(_car_edit_key, None)
+                                        else:
+                                            st.session_state[_car_edit_key] = _gsl['numero']
+                                        st.rerun()
+                                    if _edit_open:
+                                        _edit_inst = st.text_area(
+                                            "Instrucción de edición",
+                                            placeholder="Ej: cambia el fondo a azul oscuro, agrega efecto de luz neón, quita el texto...",
+                                            height=80,
+                                            key=f"ta_edit_sl_{_gsl['numero']}",
+                                            label_visibility="collapsed",
+                                        )
+                                        if st.button("🪄 Aplicar edición", key=f"btn_apply_sl_{_gsl['numero']}", type="primary", use_container_width=True):
+                                            if _edit_inst.strip():
+                                                with st.spinner("Editando con IA…"):
+                                                    try:
+                                                        _new_bytes = _edit_imagen_gemini(_gsl['bytes'], _edit_inst.strip())
+                                                        _new_bytes = _composite_logo(_new_bytes, brand)
+                                                        for _upd in st.session_state[_car_imgs_key]:
+                                                            if _upd['numero'] == _gsl['numero']:
+                                                                _upd['bytes'] = _new_bytes
+                                                                break
+                                                        st.session_state.pop(_car_edit_key, None)
+                                                        st.rerun()
+                                                    except Exception as _ee:
+                                                        st.error(f"Error al editar: {_ee}")
+                                            else:
+                                                st.warning("Escribe una instrucción.")
                                 else:
                                     st.error(f"Slide {_gsl['numero']} falló")
 
