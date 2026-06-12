@@ -930,6 +930,67 @@ Responde SOLO con JSON válido, sin texto antes ni después:
 }}"""
 
 
+def _build_carousel_slides_prompt(row, brand, n_slides, style='cards'):
+    tema      = str(row.get('Tema', ''))
+    pilar     = str(row.get('Pilar', ''))
+    arte      = str(row.get('Arte Sugerida', ''))
+    copy      = str(row.get('Copy LinkedIn', ''))[:300]
+    label     = brand.get('label', '')
+    tone      = brand.get('tone', {}).get('style', 'profesional y moderno')
+    colors    = brand.get('colors', {})
+    primary   = colors.get('primary', '')
+    secondary = colors.get('secondary', '')
+
+    _style_names = {
+        'cards':       'Cards corporativo — fondo blanco/gris, dispositivo hero prominente, paneles de datos flotantes, entorno real fotorrealista',
+        'isometric':   'Isométrico — diorama miniatura de ciudad inteligente con plataforma flotante y luces azules',
+        'infographic': 'Infografía digital twin — ciudad con glassmorphism, paneles operativos y flujos de datos',
+    }
+    style_desc = _style_names.get(style, _style_names['cards'])
+
+    mid_count  = n_slides - 2
+    mid_instrs = '\n'.join(
+        f'  - Slide {i+2}: CONTENIDO — punto clave {i+1}: dato, capacidad, beneficio o caso de uso concreto'
+        for i in range(mid_count)
+    )
+
+    return f"""Eres un director de arte y estratega de contenido B2G especializado en tecnología y seguridad pública en México.
+
+PUBLICACIÓN BASE:
+- Marca: {label}
+- Tema: {pilar} — {tema}
+- Copy de referencia: {copy}
+- Arte sugerida: {arte}
+- Tono: {tone}
+- Colores de marca: primario {primary}, secundario {secondary}
+
+TAREA: Diseña la estructura narrativa visual de un carrusel de {n_slides} slides.
+Estilo visual: {style_desc}
+
+ESTRUCTURA NARRATIVA:
+  - Slide 1: PORTADA — hook visual potente, dato o pregunta que detiene el scroll
+{mid_instrs}
+  - Slide {n_slides}: CTA — llamado a la acción, contacto, próximo paso
+
+Para CADA slide genera:
+- titulo_slide: texto corto (máximo 8 palabras en español) que iría como copy principal
+- escena: descripción de la escena visual específica (80-120 palabras en INGLÉS).
+  Describe QUÉ mostrar: sujetos, elementos tecnológicos, composición, plano, ambiente, acción narrativa.
+  Incluye los colores de marca {primary}/{secondary} como acentos de iluminación o elementos.
+  NO incluyas keywords de calidad técnica ni listas "NO X" — eso va en el master prompt aparte.
+
+Responde SOLO con JSON válido, sin texto antes ni después:
+{{
+  "titulo_carrusel": "(título general, máximo 10 palabras en español)",
+  "slides": [
+    {{"numero": 1, "tipo": "portada",   "titulo_slide": "...", "escena": "..."}},
+    {{"numero": 2, "tipo": "contenido", "titulo_slide": "...", "escena": "..."}},
+    ...
+    {{"numero": {n_slides}, "tipo": "cta", "titulo_slide": "...", "escena": "..."}}
+  ]
+}}"""
+
+
 # ── Claude Calls ───────────────────────────────────────────────────────────────
 
 def _call_claude_json(prompt):
@@ -2344,6 +2405,162 @@ def show_parrilla():
                                 st.rerun()
                             except Exception as _ue:
                                 _up_err_ph.error(f"Error al editar: {_ue}")
+
+        # ── Generador de Carrusel ──────────────────────────────────────────────
+        with st.expander("🎠 Generador de Carrusel", expanded=False):
+            st.caption(
+                "La IA diseña la estructura narrativa del carrusel y Imagen 4 genera "
+                "cada slide con coherencia visual. Descarga slides individuales o en ZIP."
+            )
+
+            _car_opciones = []
+            for _, _crow in df.iterrows():
+                _cf = str(_crow.get('Fecha', ''))
+                _ct = str(_crow.get('Tema', ''))[:50]
+                _ctp = str(_crow.get('Tipo', ''))
+                _car_opciones.append(f"{_cf} · {_ct}" + (" ⭐" if _ctp == 'especial' else ""))
+
+            if not _car_opciones:
+                st.info("No hay publicaciones en la parrilla.")
+            else:
+                _car_sel_lbl = st.selectbox("Publicación base", _car_opciones, key="car_pub_sel")
+                _car_sel_row = df.iloc[_car_opciones.index(_car_sel_lbl)].to_dict()
+
+                _cc1, _cc2, _cc3 = st.columns(3)
+                with _cc1:
+                    _car_n = st.selectbox("Slides", [3, 4, 5, 6, 7, 8], index=2, key="car_n_slides")
+                with _cc2:
+                    _car_style_opts = {
+                        '🃏 Cards': 'cards', '🏙️ Isométrico': 'isometric', '📊 Infografía': 'infographic',
+                    }
+                    _car_style_sel = st.selectbox("Estilo", list(_car_style_opts.keys()), key="car_style_sel")
+                    _car_style     = _car_style_opts[_car_style_sel]
+                with _cc3:
+                    _car_q_opts = {"⚡ Rápida": "fast", "⭐ Estándar": "standard", "💎 Ultra": "ultra"}
+                    _car_q_sel  = st.selectbox("Calidad", list(_car_q_opts.keys()), index=1, key="car_quality_sel")
+                    _car_q      = _car_q_opts[_car_q_sel]
+
+                _car_struct_key = f"car_struct_{meta.get('marca','')}_{_car_sel_lbl}_{_car_n}_{_car_style}"
+                _car_imgs_key   = f"car_imgs_{_car_struct_key}_{_car_q}"
+
+                _car_prov_lbl = "Gemini" if _ai_provider() == 'gemini' else "Claude"
+                _cs1, _cs2 = st.columns([3, 1])
+                with _cs1:
+                    if st.button(
+                        f"✨ Diseñar estructura con {_car_prov_lbl}",
+                        type="primary", use_container_width=True, key="btn_car_struct",
+                    ):
+                        st.session_state.pop(_car_struct_key, None)
+                        st.session_state.pop(_car_imgs_key, None)
+                        with st.spinner(f"Diseñando {_car_n} slides…"):
+                            try:
+                                _cp = _build_carousel_slides_prompt(_car_sel_row, brand, _car_n, _car_style)
+                                _cr = _call_claude_json(_cp)
+                                st.session_state[_car_struct_key] = _parse_json_obj(_cr)
+                            except Exception as _ce:
+                                st.error(f"Error: {_ce}")
+                with _cs2:
+                    if st.button("🗑️ Reiniciar", use_container_width=True, key="btn_car_reset"):
+                        st.session_state.pop(_car_struct_key, None)
+                        st.session_state.pop(_car_imgs_key, None)
+                        st.rerun()
+
+                if _car_struct_key in st.session_state:
+                    _car_data  = st.session_state[_car_struct_key]
+                    _car_slides = _car_data.get('slides', [])
+                    st.markdown(f"**{_car_data.get('titulo_carrusel', '')}**")
+
+                    _tipo_icon = {'portada': '🎯', 'contenido': '📌', 'cta': '📣'}
+                    for _sl in _car_slides:
+                        _ico = _tipo_icon.get(_sl.get('tipo',''), '📌')
+                        with st.expander(f"{_ico} Slide {_sl['numero']}: {_sl.get('titulo_slide','')}", expanded=False):
+                            _sl['escena'] = st.text_area(
+                                "Escena (editable antes de generar)",
+                                value=_sl.get('escena', ''),
+                                height=90,
+                                key=f"car_escena_{_sl['numero']}",
+                            )
+
+                    _car_time_map = {"fast": 10, "standard": 25, "ultra": 45}
+                    _total_min    = (_car_time_map.get(_car_q, 25) * _car_n) // 60 + 1
+                    st.caption(f"Tiempo estimado: ~{_total_min} min · Formato 1:1 (carrusel Instagram/LinkedIn)")
+
+                    if st.button(
+                        f"🎨 Generar {_car_n} slides",
+                        type="primary", use_container_width=True, key="btn_car_gen",
+                    ):
+                        st.session_state.pop(_car_imgs_key, None)
+                        _master    = _MASTER_PROMPTS.get(_car_style, '')
+                        _car_imgs  = []
+                        _cprog     = st.progress(0, text="Iniciando…")
+                        _cerr_ph   = st.empty()
+
+                        for _ci, _sl in enumerate(_car_slides):
+                            _cprog.progress(
+                                _ci / _car_n,
+                                text=f"Slide {_sl['numero']}/{_car_n} — {_sl.get('titulo_slide','')[:45]}…"
+                            )
+                            _fp = f"{_sl['escena']}\n\n{_master}" if _master else _sl['escena']
+                            try:
+                                _sb = _generate_imagen(_fp, '1:1', _car_q)
+                                _sb = _composite_logo(_sb, brand)
+                                _car_imgs.append({
+                                    'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
+                                    'titulo': _sl.get('titulo_slide',''), 'bytes': _sb,
+                                })
+                            except Exception as _ge:
+                                _cerr_ph.warning(f"Slide {_sl['numero']} falló: {_ge}")
+                                _car_imgs.append({
+                                    'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
+                                    'titulo': _sl.get('titulo_slide',''), 'bytes': None,
+                                })
+
+                        _ok_count = len([s for s in _car_imgs if s['bytes']])
+                        _cprog.progress(1.0, text=f"✅ {_ok_count}/{_car_n} slides generados")
+                        st.session_state[_car_imgs_key] = _car_imgs
+                        st.rerun()
+
+                    if _car_imgs_key in st.session_state:
+                        _car_imgs = st.session_state[_car_imgs_key]
+                        st.markdown("---")
+                        _gc = st.columns(min(3, len(_car_imgs)))
+                        for _gi, _gsl in enumerate(_car_imgs):
+                            with _gc[_gi % 3]:
+                                _ico = _tipo_icon.get(_gsl.get('tipo',''), '📌')
+                                if _gsl['bytes']:
+                                    st.image(_gsl['bytes'], use_container_width=True)
+                                    st.caption(f"{_ico} {_gsl['titulo'][:35]}")
+                                    _mrc_z = meta.get('marca','').replace(' ','_')
+                                    st.download_button(
+                                        f"📥 Slide {_gsl['numero']}",
+                                        data=_gsl['bytes'],
+                                        file_name=f"carrusel_{_mrc_z}_slide_{_gsl['numero']:02d}.png",
+                                        mime="image/png",
+                                        use_container_width=True,
+                                        key=f"btn_dl_sl_{_gsl['numero']}",
+                                    )
+                                else:
+                                    st.error(f"Slide {_gsl['numero']} falló")
+
+                        _slides_ok = [s for s in _car_imgs if s['bytes']]
+                        if len(_slides_ok) > 1:
+                            import zipfile
+                            _zbuf = io.BytesIO()
+                            _mrc_z = meta.get('marca','').replace(' ','_')
+                            with zipfile.ZipFile(_zbuf, 'w', zipfile.ZIP_DEFLATED) as _zf:
+                                for _zsl in _slides_ok:
+                                    _zf.writestr(
+                                        f"carrusel_{_mrc_z}_slide_{_zsl['numero']:02d}_{_zsl['tipo']}.png",
+                                        _zsl['bytes'],
+                                    )
+                            st.download_button(
+                                f"📦 Descargar todos ({len(_slides_ok)} slides) .zip",
+                                data=_zbuf.getvalue(),
+                                file_name=f"carrusel_{_mrc_z}_{_car_sel_row.get('Fecha','')}.zip",
+                                mime="application/zip",
+                                use_container_width=True,
+                                key="btn_dl_car_zip",
+                            )
 
         st.markdown("---")
         st.markdown("#### 🎨 Generador de Prompts de Imagen")
