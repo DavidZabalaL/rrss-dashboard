@@ -2231,6 +2231,121 @@ def show_parrilla():
     # ═══ TAB 4: PROMPTS DE IMAGEN ════════════════════════════════════════════════
     if not _is_visita:
      with tab4:
+
+        # ── Editor de imagen propia ────────────────────────────────────────────
+        with st.expander("📤 Editar imagen propia", expanded=False):
+            st.caption(
+                "Sube una imagen tuya y aplica ediciones con IA o agrega el logo de la marca."
+            )
+
+            _up_file = st.file_uploader(
+                "Sube tu imagen",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="img_upload_file",
+            )
+
+            _up_cache = "img_upload_current"
+            _up_edits = "img_upload_edits"
+
+            if _up_file is not None:
+                _raw_bytes = _up_file.read()
+                from PIL import Image as _PILImage
+                _pil = _PILImage.open(io.BytesIO(_raw_bytes)).convert('RGB')
+                _buf = io.BytesIO()
+                _pil.save(_buf, format='PNG')
+                _orig_bytes = _buf.getvalue()
+                # Reset history when a new file is uploaded
+                if st.session_state.get("img_upload_last_name") != _up_file.name:
+                    st.session_state["img_upload_last_name"] = _up_file.name
+                    st.session_state[_up_cache] = _orig_bytes
+                    st.session_state[_up_edits] = []
+
+            if _up_cache in st.session_state:
+                _up_hist    = st.session_state.setdefault(_up_edits, [])
+                _up_current = _up_hist[-1]['bytes'] if _up_hist else st.session_state[_up_cache]
+                _up_ver     = len(_up_hist) + 1
+
+                _col_up_img, _col_up_ctrl = st.columns([1, 1], gap="large")
+
+                with _col_up_img:
+                    st.image(_up_current, use_container_width=True)
+                    if _up_hist:
+                        st.caption(f"Versión {_up_ver} · {len(_up_hist)} edición(es)")
+
+                    _col_logo_btn, _col_dl_up = st.columns(2)
+                    with _col_logo_btn:
+                        if st.button(
+                            "🏷️ Agregar logo",
+                            use_container_width=True,
+                            key="btn_up_logo",
+                            help="Superpone el logo blanco de la marca en la esquina inferior derecha",
+                        ):
+                            _with_logo = _composite_logo(_up_current, brand)
+                            _up_hist.append({'instruction': '[logo agregado]', 'bytes': _with_logo})
+                            st.rerun()
+                    with _col_dl_up:
+                        st.download_button(
+                            f"📥 Descargar v{_up_ver}",
+                            data=_up_current,
+                            file_name=f"imagen_editada_v{_up_ver}.png",
+                            mime="image/png",
+                            use_container_width=True,
+                            key="btn_dl_upload",
+                        )
+
+                with _col_up_ctrl:
+                    st.markdown("**Editar con IA**")
+                    _up_instr = st.text_area(
+                        "Instrucción de edición",
+                        placeholder=(
+                            "Ej: Cambia el fondo a azul oscuro\n"
+                            "Agrega iluminación nocturna\n"
+                            "Quita el texto de la imagen\n"
+                            "Hazla más minimalista"
+                        ),
+                        height=120,
+                        key="img_upload_instr",
+                    )
+
+                    _col_up_apply, _col_up_undo = st.columns([3, 1])
+                    with _col_up_apply:
+                        _up_apply = st.button(
+                            "🪄 Aplicar edición",
+                            type="primary",
+                            use_container_width=True,
+                            disabled=not _up_instr.strip(),
+                            key="btn_up_apply",
+                        )
+                    with _col_up_undo:
+                        if st.button(
+                            "↩️",
+                            use_container_width=True,
+                            disabled=not _up_hist,
+                            key="btn_up_undo",
+                            help="Deshacer última edición",
+                        ):
+                            _up_hist.pop()
+                            st.rerun()
+
+                    if _up_hist:
+                        st.markdown("**Historial:**")
+                        for _ui, _uh in enumerate(_up_hist):
+                            st.caption(f"v{_ui+2}: {_uh['instruction'][:70]}")
+
+                    if _up_apply and _up_instr.strip():
+                        _up_err_ph = st.empty()
+                        with st.spinner("Aplicando edición… (15-30 segundos)"):
+                            try:
+                                _up_edited = _edit_imagen_gemini(_up_current, _up_instr.strip())
+                                _up_hist.append({
+                                    'instruction': _up_instr.strip(),
+                                    'bytes': _up_edited,
+                                })
+                                st.rerun()
+                            except Exception as _ue:
+                                _up_err_ph.error(f"Error al editar: {_ue}")
+
+        st.markdown("---")
         st.markdown("#### 🎨 Generador de Prompts de Imagen")
         st.caption(
             "Selecciona una publicación y genera prompts profesionales listos para pegar "
