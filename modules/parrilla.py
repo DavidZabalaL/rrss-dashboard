@@ -197,29 +197,51 @@ def _ai_provider():
         return 'gemini'
 
 
-def _generate_imagen4(prompt_text, aspect_ratio='16:9', quality='standard'):
-    """Generates an image with Imagen 4 and returns raw PNG bytes."""
+def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
+    """Generates an image and returns raw image bytes."""
     import urllib.request, base64
     key = _get_gemini_key()
-    _model_map = {
-        'fast':     'imagen-4.0-fast-generate-001',
-        'standard': 'imagen-4.0-generate-001',
-        'ultra':    'imagen-4.0-ultra-generate-001',
-    }
-    model = _model_map.get(quality, 'imagen-4.0-generate-001')
-    url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
-           f'{model}:predict?key={key}')
-    body = json.dumps({
-        'instances': [{'prompt': prompt_text}],
-        'parameters': {'sampleCount': 1, 'aspectRatio': aspect_ratio},
-    }).encode()
-    req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
-    resp = urllib.request.urlopen(req, timeout=90)
-    data = json.loads(resp.read())
-    preds = data.get('predictions', [])
-    if not preds or 'bytesBase64Encoded' not in preds[0]:
-        raise RuntimeError('Imagen 4 no devolvió imagen. Intenta de nuevo.')
-    return base64.b64decode(preds[0]['bytesBase64Encoded'])
+
+    if quality == 'nano_banana':
+        # Gemini 3 Pro Image Preview — generateContent with thinking
+        url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+               f'nano-banana-pro-preview:generateContent?key={key}')
+        # Add aspect hint to the prompt
+        aspect_hint = 'wide landscape format' if aspect_ratio == '16:9' else 'square format'
+        body = json.dumps({
+            'contents': [{'parts': [{'text': f'{prompt_text}, {aspect_hint}'}]}],
+            'generationConfig': {'responseModalities': ['IMAGE']},
+        }).encode()
+        req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, timeout=120)
+        data = json.loads(resp.read())
+        parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+        for p in parts:
+            if 'inlineData' in p:
+                return base64.b64decode(p['inlineData']['data'])
+        raise RuntimeError('Nano Banana no devolvió imagen. Intenta de nuevo.')
+
+    else:
+        # Imagen 4 — predict endpoint
+        _model_map = {
+            'fast':     'imagen-4.0-fast-generate-001',
+            'standard': 'imagen-4.0-generate-001',
+            'ultra':    'imagen-4.0-ultra-generate-001',
+        }
+        model = _model_map.get(quality, 'imagen-4.0-generate-001')
+        url   = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+                 f'{model}:predict?key={key}')
+        body  = json.dumps({
+            'instances':  [{'prompt': prompt_text}],
+            'parameters': {'sampleCount': 1, 'aspectRatio': aspect_ratio},
+        }).encode()
+        req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, timeout=90)
+        data = json.loads(resp.read())
+        preds = data.get('predictions', [])
+        if not preds or 'bytesBase64Encoded' not in preds[0]:
+            raise RuntimeError('Imagen 4 no devolvió imagen. Intenta de nuevo.')
+        return base64.b64decode(preds[0]['bytesBase64Encoded'])
 
 
 # ── Dates ──────────────────────────────────────────────────────────────────────
@@ -2178,17 +2200,27 @@ def show_parrilla():
                         _col_qual, _col_info = st.columns([3, 2])
                         with _col_qual:
                             _quality_sel = st.radio(
-                                "Calidad",
-                                ["⚡ Rápida", "⭐ Estándar", "💎 Ultra"],
+                                "Motor de imagen",
+                                ["⚡ Rápida", "⭐ Estándar", "💎 Ultra", "🍌 Nano Banana"],
                                 index=1,
                                 horizontal=True,
                                 key="img4_quality",
                             )
-                        _quality_map = {"⚡ Rápida": "fast", "⭐ Estándar": "standard", "💎 Ultra": "ultra"}
-                        _quality     = _quality_map[_quality_sel]
+                        _quality_map = {
+                            "⚡ Rápida":      "fast",
+                            "⭐ Estándar":    "standard",
+                            "💎 Ultra":       "ultra",
+                            "🍌 Nano Banana": "nano_banana",
+                        }
+                        _quality = _quality_map[_quality_sel]
 
                         with _col_info:
-                            _time_est = {"fast": "~10 seg", "standard": "~20 seg", "ultra": "~40 seg"}
+                            _time_est = {
+                                "fast":        "~10 seg",
+                                "standard":    "~20 seg",
+                                "ultra":       "~40 seg",
+                                "nano_banana": "~30 seg · con razonamiento",
+                            }
                             st.caption(f"Formato: **{_aspect_lbl}** · {_time_est[_quality]}")
 
                         _gen_img = st.button(
@@ -2206,7 +2238,7 @@ def show_parrilla():
                             _spin_lbl = {"fast": "10-15", "standard": "20-30", "ultra": "35-50"}
                             with st.spinner(f"Imagen 4 generando… ({_spin_lbl[_quality]} segundos)"):
                                 try:
-                                    _img_bytes = _generate_imagen4(_prompt_gen, _aspect4, _quality)
+                                    _img_bytes = _generate_imagen(_prompt_gen, _aspect4, _quality)
                                     st.session_state[_img4_cache] = {
                                         'bytes': _img_bytes,
                                         'aspect': _aspect_lbl,
