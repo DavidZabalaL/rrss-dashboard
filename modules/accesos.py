@@ -17,6 +17,7 @@ _ROLE_LABEL = {
     'admin':    ('🛡️', 'Admin',    '#ffd700'),
     'uploader': ('📁', 'Importar', '#1e90ff'),
     'viewer':   ('👁️', 'Lectura',  '#5b8db8'),
+    'visita':   ('👤', 'Visita',   '#8892a4'),
 }
 
 
@@ -111,10 +112,15 @@ def show_accesos():
                                    placeholder="Nombre Apellido")
             new_p  = st.text_input("Contraseña", type="password",
                                    key="pg_acc_new_p", placeholder="Contraseña")
+            _rol_labels = {
+                'visita':   '👤 Solo ve parrilla y KPIs',
+                'viewer':   '👁️ Lectura completa',
+                'uploader': '📁 Puede importar datos',
+            }
             new_rl = st.selectbox(
                 "Rol",
-                ['viewer', 'uploader'],
-                format_func=lambda r: "👁️ Solo lectura" if r == 'viewer' else "📁 Puede importar datos",
+                list(_rol_labels.keys()),
+                format_func=lambda r: _rol_labels[r],
                 key="pg_acc_new_rl",
             )
             if st.button("➕ Crear usuario", use_container_width=True,

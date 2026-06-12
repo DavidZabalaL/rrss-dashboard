@@ -404,9 +404,16 @@ with st.sidebar:
     ]
     if user.get('role') == 'admin':
         _nav_base = _nav_base + ["🔐  Accesos"]
-    nav_options = _nav_base if user.get('role') in ('admin', 'uploader') else [
-        x for x in _nav_base if x != "📁  Importar Datos"
-    ]
+    _role = user.get('role', 'viewer')
+    if _role == 'visita':
+        nav_options = [
+            "🎯  Monitor de KPIs", "🏠  Dashboard",
+            "📅  Parrilla de Contenido", "📖  Manual de Uso",
+        ]
+    elif _role in ('admin', 'uploader'):
+        nav_options = _nav_base
+    else:
+        nav_options = [x for x in _nav_base if x != "📁  Importar Datos"]
     # Si la sección activa fue removida por cambio de rol, resetear
     if st.session_state.get('nav_radio') not in nav_options:
         st.session_state.nav_radio = "🎯  Monitor de KPIs"

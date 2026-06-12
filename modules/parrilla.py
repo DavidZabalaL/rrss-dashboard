@@ -1493,6 +1493,9 @@ def show_parrilla():
         "Fechas especiales como publicaciones extra."
     )
 
+    _user_role = st.session_state.get('current_user', {}).get('role', 'viewer')
+    _is_visita = _user_role == 'visita'
+
     marca_key = st.session_state.get('marca_activa', 'k1')
     marca_id  = 'kabat-one' if marca_key == 'k1' else 'sym-servicios'
     brand     = _load_brand(marca_id)
@@ -1534,253 +1537,273 @@ def show_parrilla():
                    f"Días configurados: {', '.join(dias_pub)}")
         return
 
+    if _is_visita:
+        # Para visita: cargar parrilla directamente desde DB sin mostrar el generador
+        try:
+            from database import get_parrilla_posts as _gpp_v
+            _posts_v = _gpp_v(marca_nombre, año, mes)
+            if _posts_v:
+                st.session_state['parrilla_df']  = _posts_to_df(_posts_v)
+                st.session_state['parrilla_meta'] = {
+                    'marca': marca_nombre, 'año': año, 'mes': mes,
+                    'objetivo': '', 'brand': brand,
+                }
+            else:
+                st.info(f"No hay parrilla guardada para {MESES_ES[mes]} {año}.")
+                return
+        except Exception as _ev:
+            st.error(f"Error al cargar parrilla: {_ev}")
+            return
+
     # ── Fechas especiales — investigación automática ───────────────────────────
-    st.markdown("---")
-    st.markdown("### 📆 Fechas Especiales del Mes")
+    if not _is_visita:
+        st.markdown("---")
+        st.markdown("### 📆 Fechas Especiales del Mes")
 
     fd_key     = f"fechas_esp_{marca_key}_{año}_{mes}"
     fd_sel_key = f"fechas_sel_{marca_key}_{año}_{mes}"
 
     fechas_ya_buscadas = fd_key in st.session_state
 
-    col_inv, col_ref, col_info = st.columns([1.8, 1, 3])
-    with col_inv:
-        lbl_buscar = "✅ Fechas buscadas" if fechas_ya_buscadas else "🔍  Buscar fechas del mes"
-        if st.button(lbl_buscar, use_container_width=True,
-                     key="btn_investigar_fechas",
-                     disabled=fechas_ya_buscadas,
-                     type="secondary" if fechas_ya_buscadas else "primary"):
-            with st.spinner(f"Analizando {MESES_ES[mes]} {año}…"):
-                try:
-                    fechas = _research_special_dates(año, mes, brand.get('label', ''))
-                    st.session_state[fd_key]     = fechas
-                    st.session_state[fd_sel_key] = [f['fecha'] for f in fechas]
-                except Exception as e:
-                    st.error(f"Error al buscar fechas: {e}")
-                    st.stop()
-            st.rerun()
-    with col_ref:
-        if fechas_ya_buscadas:
-            if st.button("🔄 Regenerar", use_container_width=True,
-                         key="btn_regenerar_fechas",
-                         help="Vuelve a buscar fechas (puede dar resultados distintos)"):
-                st.session_state.pop(fd_key, None)
-                st.session_state.pop(fd_sel_key, None)
+    if not _is_visita:
+        col_inv, col_ref, col_info = st.columns([1.8, 1, 3])
+        with col_inv:
+            lbl_buscar = "✅ Fechas buscadas" if fechas_ya_buscadas else "🔍  Buscar fechas del mes"
+            if st.button(lbl_buscar, use_container_width=True,
+                         key="btn_investigar_fechas",
+                         disabled=fechas_ya_buscadas,
+                         type="secondary" if fechas_ya_buscadas else "primary"):
+                with st.spinner(f"Analizando {MESES_ES[mes]} {año}…"):
+                    try:
+                        fechas = _research_special_dates(año, mes, brand.get('label', ''))
+                        st.session_state[fd_key]     = fechas
+                        st.session_state[fd_sel_key] = [f['fecha'] for f in fechas]
+                    except Exception as e:
+                        st.error(f"Error al buscar fechas: {e}")
+                        st.stop()
                 st.rerun()
-    with col_info:
-        if fechas_ya_buscadas:
-            n = len(st.session_state.get(fd_key, []))
-            st.caption(
-                f"{'✅' if n > 0 else 'ℹ️'} {'Se encontraron' if n > 0 else 'No se encontraron'} "
-                f"**{n} fechas** relevantes para el sector en {MESES_ES[mes]}. "
-                f"Solo se incluyen fechas con vínculo directo a seguridad pública."
-            )
-        else:
-            st.caption(
-                "Análisis específico del sector: solo fechas con conexión directa a "
-                "C4/C5, videovigilancia o tecnología de mando. Calidad sobre cantidad."
-            )
-
-    special_dates   = st.session_state.get(fd_key, [])
-    selected_fechas = st.session_state.get(fd_sel_key, [])
-
-    if special_dates:
-        col_cal, col_list = st.columns([1, 1.4])
-        with col_cal:
-            st.markdown(
-                _render_calendar(año, mes, pub_dates, special_dates),
-                unsafe_allow_html=True,
-            )
-        with col_list:
-            altas  = [sd for sd in special_dates if sd.get('relevancia','alta') == 'alta']
-            medias = [sd for sd in special_dates if sd.get('relevancia','') == 'media']
-            new_sel = list(selected_fechas)
-
-            _eje_icon = {"tecnico": "🔒", "empatico": "🤝"}
-
-            if altas:
-                st.markdown("**🎯 Alta relevancia**")
-                for sd in altas:
-                    d_obj   = date.fromisoformat(sd['fecha'])
-                    dia_lbl = f"{d_obj.day} {MESES_ES[mes][:3]} ({_DIA_LABEL[d_obj.weekday()]})"
-                    tipo_b  = {"nacional": "🇲🇽", "internacional": "🌍", "sector": "🔒"}.get(sd.get('tipo',''), "📌")
-                    eje_b   = _eje_icon.get(sd.get('eje', 'tecnico'), '🔒')
-                    checked = sd['fecha'] in selected_fechas
-                    val = st.checkbox(
-                        f"{tipo_b}{eje_b} **{dia_lbl}** — {sd['nombre']}",
-                        value=checked,
-                        help=f"💡 {sd.get('conexion', '')}",
-                        key=f"fd_chk_{sd['fecha']}",
-                    )
-                    if val and sd['fecha'] not in new_sel:
-                        new_sel.append(sd['fecha'])
-                    elif not val and sd['fecha'] in new_sel:
-                        new_sel.remove(sd['fecha'])
-
-            if medias:
-                st.markdown("**📌 Relevancia media**")
-                for sd in medias:
-                    d_obj   = date.fromisoformat(sd['fecha'])
-                    dia_lbl = f"{d_obj.day} {MESES_ES[mes][:3]} ({_DIA_LABEL[d_obj.weekday()]})"
-                    tipo_b  = {"nacional": "🇲🇽", "internacional": "🌍", "sector": "🔒"}.get(sd.get('tipo',''), "📌")
-                    eje_b   = _eje_icon.get(sd.get('eje', 'tecnico'), '🔒')
-                    checked = sd['fecha'] in selected_fechas
-                    val = st.checkbox(
-                        f"{tipo_b}{eje_b} {dia_lbl} — {sd['nombre']}",
-                        value=checked,
-                        help=f"💡 {sd.get('conexion', '')}",
-                        key=f"fd_chk_{sd['fecha']}",
-                    )
-                    if val and sd['fecha'] not in new_sel:
-                        new_sel.append(sd['fecha'])
-                    elif not val and sd['fecha'] in new_sel:
-                        new_sel.remove(sd['fecha'])
-
-            if not altas and not medias:
-                st.info(
-                    f"No se encontraron fechas con conexión directa al sector "
-                    f"en {MESES_ES[mes]}. Puedes usar **🔄 Regenerar** o continuar "
-                    f"solo con los días regulares de publicación."
+        with col_ref:
+            if fechas_ya_buscadas:
+                if st.button("🔄 Regenerar", use_container_width=True,
+                             key="btn_regenerar_fechas",
+                             help="Vuelve a buscar fechas (puede dar resultados distintos)"):
+                    st.session_state.pop(fd_key, None)
+                    st.session_state.pop(fd_sel_key, None)
+                    st.rerun()
+        with col_info:
+            if fechas_ya_buscadas:
+                n = len(st.session_state.get(fd_key, []))
+                st.caption(
+                    f"{'✅' if n > 0 else 'ℹ️'} {'Se encontraron' if n > 0 else 'No se encontraron'} "
+                    f"**{n} fechas** relevantes para el sector en {MESES_ES[mes]}. "
+                    f"Solo se incluyen fechas con vínculo directo a seguridad pública."
+                )
+            else:
+                st.caption(
+                    "Análisis específico del sector: solo fechas con conexión directa a "
+                    "C4/C5, videovigilancia o tecnología de mando. Calidad sobre cantidad."
                 )
 
-            st.session_state[fd_sel_key] = new_sel
-            selected_fechas = new_sel
-    else:
-        st.markdown(
-            _render_calendar(año, mes, pub_dates, []),
-            unsafe_allow_html=True,
-        )
-        if not fechas_ya_buscadas:
-            st.caption(
-                "Pulsa **Buscar fechas del mes** para que Claude identifique "
-                "efemérides específicas del sector seguridad pública."
+        special_dates   = st.session_state.get(fd_key, [])
+        selected_fechas = st.session_state.get(fd_sel_key, [])
+
+        if special_dates:
+            col_cal, col_list = st.columns([1, 1.4])
+            with col_cal:
+                st.markdown(
+                    _render_calendar(año, mes, pub_dates, special_dates),
+                    unsafe_allow_html=True,
+                )
+            with col_list:
+                altas  = [sd for sd in special_dates if sd.get('relevancia','alta') == 'alta']
+                medias = [sd for sd in special_dates if sd.get('relevancia','') == 'media']
+                new_sel = list(selected_fechas)
+
+                _eje_icon = {"tecnico": "🔒", "empatico": "🤝"}
+
+                if altas:
+                    st.markdown("**🎯 Alta relevancia**")
+                    for sd in altas:
+                        d_obj   = date.fromisoformat(sd['fecha'])
+                        dia_lbl = f"{d_obj.day} {MESES_ES[mes][:3]} ({_DIA_LABEL[d_obj.weekday()]})"
+                        tipo_b  = {"nacional": "🇲🇽", "internacional": "🌍", "sector": "🔒"}.get(sd.get('tipo',''), "📌")
+                        eje_b   = _eje_icon.get(sd.get('eje', 'tecnico'), '🔒')
+                        checked = sd['fecha'] in selected_fechas
+                        val = st.checkbox(
+                            f"{tipo_b}{eje_b} **{dia_lbl}** — {sd['nombre']}",
+                            value=checked,
+                            help=f"💡 {sd.get('conexion', '')}",
+                            key=f"fd_chk_{sd['fecha']}",
+                        )
+                        if val and sd['fecha'] not in new_sel:
+                            new_sel.append(sd['fecha'])
+                        elif not val and sd['fecha'] in new_sel:
+                            new_sel.remove(sd['fecha'])
+
+                if medias:
+                    st.markdown("**📌 Relevancia media**")
+                    for sd in medias:
+                        d_obj   = date.fromisoformat(sd['fecha'])
+                        dia_lbl = f"{d_obj.day} {MESES_ES[mes][:3]} ({_DIA_LABEL[d_obj.weekday()]})"
+                        tipo_b  = {"nacional": "🇲🇽", "internacional": "🌍", "sector": "🔒"}.get(sd.get('tipo',''), "📌")
+                        eje_b   = _eje_icon.get(sd.get('eje', 'tecnico'), '🔒')
+                        checked = sd['fecha'] in selected_fechas
+                        val = st.checkbox(
+                            f"{tipo_b}{eje_b} {dia_lbl} — {sd['nombre']}",
+                            value=checked,
+                            help=f"💡 {sd.get('conexion', '')}",
+                            key=f"fd_chk_{sd['fecha']}",
+                        )
+                        if val and sd['fecha'] not in new_sel:
+                            new_sel.append(sd['fecha'])
+                        elif not val and sd['fecha'] in new_sel:
+                            new_sel.remove(sd['fecha'])
+
+                if not altas and not medias:
+                    st.info(
+                        f"No se encontraron fechas con conexión directa al sector "
+                        f"en {MESES_ES[mes]}. Puedes usar **🔄 Regenerar** o continuar "
+                        f"solo con los días regulares de publicación."
+                    )
+
+                st.session_state[fd_sel_key] = new_sel
+                selected_fechas = new_sel
+        else:
+            st.markdown(
+                _render_calendar(año, mes, pub_dates, []),
+                unsafe_allow_html=True,
+            )
+            if not fechas_ya_buscadas:
+                st.caption(
+                    "Pulsa **Buscar fechas del mes** para que Claude identifique "
+                    "efemérides específicas del sector seguridad pública."
+                )
+
+        special_dates_selected = [sd for sd in special_dates if sd['fecha'] in selected_fechas]
+
+        # ── Objetivo mensual ───────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("### 🎯 Objetivo del Mes")
+
+        obj_preset = st.selectbox("Selecciona el objetivo principal", OBJETIVOS_PRESET,
+                                   key="parrilla_obj_preset")
+        objetivo = ""
+        if obj_preset == "Personalizado…":
+            objetivo = st.text_input("Describe el objetivo mensual",
+                                     placeholder="Ej: Posicionar en el sector público del bajío…",
+                                     key="parrilla_obj_custom")
+        else:
+            objetivo = obj_preset
+            st.caption(f"Objetivo seleccionado: **{objetivo}**")
+
+        # ── Resumen del mes ────────────────────────────────────────────────────────
+        st.markdown("---")
+        ai_insights  = _get_ai_insights_from_session(marca_key, prev_año, prev_mes)
+        total_piezas = len(pub_dates) + len(special_dates_selected)
+
+        if ai_insights:
+            st.success(
+                f"**{brand.get('label','')}** · **{MESES_ES[mes]} {año}**  →  "
+                f"{len(pub_dates)} publicaciones regulares + {len(special_dates_selected)} especiales "
+                f"= **{total_piezas} piezas**  \n"
+                f"✅ Insights de IA de **{MESES_ES[prev_mes]} {prev_año}** disponibles "
+                f"({', '.join(ai_insights.keys())}) — se usarán como base estratégica."
+            )
+        else:
+            st.info(
+                f"**{brand.get('label','')}** · **{MESES_ES[mes]} {año}**  →  "
+                f"{len(pub_dates)} publicaciones regulares + {len(special_dates_selected)} especiales "
+                f"= **{total_piezas} piezas**  \n"
+                f"ℹ️ Sin análisis de Insights guardado para {MESES_ES[prev_mes]} {prev_año}. "
+                "Para mejor resultado, genera primero el análisis en **🤖 Insights para IA**."
             )
 
-    special_dates_selected = [sd for sd in special_dates if sd['fecha'] in selected_fechas]
-
-    # ── Objetivo mensual ───────────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 🎯 Objetivo del Mes")
-
-    obj_preset = st.selectbox("Selecciona el objetivo principal", OBJETIVOS_PRESET,
-                               key="parrilla_obj_preset")
-    objetivo = ""
-    if obj_preset == "Personalizado…":
-        objetivo = st.text_input("Describe el objetivo mensual",
-                                 placeholder="Ej: Posicionar en el sector público del bajío…",
-                                 key="parrilla_obj_custom")
-    else:
-        objetivo = obj_preset
-        st.caption(f"Objetivo seleccionado: **{objetivo}**")
-
-    # ── Resumen del mes ────────────────────────────────────────────────────────
-    st.markdown("---")
-    ai_insights  = _get_ai_insights_from_session(marca_key, prev_año, prev_mes)
-    total_piezas = len(pub_dates) + len(special_dates_selected)
-
-    if ai_insights:
-        st.success(
-            f"**{brand.get('label','')}** · **{MESES_ES[mes]} {año}**  →  "
-            f"{len(pub_dates)} publicaciones regulares + {len(special_dates_selected)} especiales "
-            f"= **{total_piezas} piezas**  \n"
-            f"✅ Insights de IA de **{MESES_ES[prev_mes]} {prev_año}** disponibles "
-            f"({', '.join(ai_insights.keys())}) — se usarán como base estratégica."
-        )
-    else:
-        st.info(
-            f"**{brand.get('label','')}** · **{MESES_ES[mes]} {año}**  →  "
-            f"{len(pub_dates)} publicaciones regulares + {len(special_dates_selected)} especiales "
-            f"= **{total_piezas} piezas**  \n"
-            f"ℹ️ Sin análisis de Insights guardado para {MESES_ES[prev_mes]} {prev_año}. "
-            "Para mejor resultado, genera primero el análisis en **🤖 Insights para IA**."
-        )
-
-    # ── Botones principales ────────────────────────────────────────────────────
-    col_gen, col_clear = st.columns([3, 1])
-    with col_gen:
-        generate = st.button(
-            "✨  Generar Parrilla con IA",
-            type="primary", use_container_width=True,
-            disabled=not objetivo.strip(),
-            key="btn_generar_parrilla",
-        )
-    with col_clear:
-        if st.button("🗑️  Limpiar", use_container_width=True, key="btn_limpiar_parrilla"):
-            for k in ('parrilla_df', 'parrilla_meta', 'parrilla_historial'):
-                st.session_state.pop(k, None)
-            st.rerun()
-
-    if not objetivo.strip():
-        st.caption("Selecciona o escribe un objetivo para habilitar la generación.")
-
-    # ── Generación ─────────────────────────────────────────────────────────────
-    if generate and objetivo.strip():
-        with st.status("Generando parrilla con IA…", expanded=True) as status:
-            raw_ctx = None
-            if ai_insights:
-                st.write(f"Cargando análisis de Insights de {MESES_ES[prev_mes]} {prev_año}…")
-            else:
-                st.write(f"Consultando datos de {MESES_ES[prev_mes]} {prev_año}…")
-                raw_ctx = _get_raw_insights_context(brand.get('label', ''), prev_año, prev_mes)
-
-            n_esp = len(special_dates_selected)
-            st.write(f"Construyendo {len(pub_dates)} piezas regulares"
-                     + (f" + {n_esp} especiales" if n_esp else "") + "…")
-
-            prompt = _build_main_prompt(
-                brand, año, mes, objetivo, pub_dates,
-                special_dates_selected, ai_insights, raw_ctx,
+        # ── Botones principales ────────────────────────────────────────────────────
+        col_gen, col_clear = st.columns([3, 1])
+        with col_gen:
+            generate = st.button(
+                "✨  Generar Parrilla con IA",
+                type="primary", use_container_width=True,
+                disabled=not objetivo.strip(),
+                key="btn_generar_parrilla",
             )
-
-            _lbl = "Gemini 2.5 Flash" if _ai_provider() == 'gemini' else "Claude Sonnet"
-            st.write(f"Llamando a {_lbl} (20-60 segundos)…")
-            try:
-                raw   = _call_claude_json(prompt)
-                posts = _parse_json(raw)
-                df    = _posts_to_df(posts)
-
-                st.session_state['parrilla_df']        = df
-                st.session_state['parrilla_historial'] = []
-                st.session_state['parrilla_meta'] = {
-                    'marca':        brand.get('label', ''),
-                    'año':          año,
-                    'mes':          mes,
-                    'objetivo':     objetivo,
-                    'con_insights': bool(ai_insights),
-                    'insights_mes': f"{MESES_ES[prev_mes]} {prev_año}",
-                    'brand':        brand,
-                }
-                # Guardar en DB automáticamente
-                try:
-                    _save_df_to_db(df, brand.get('label', ''), año, mes)
-                    st.write("✅ Guardado en base de datos.")
-                except Exception:
-                    pass
-
-                status.update(label=f"Parrilla lista: {len(df)} piezas", state="complete")
+        with col_clear:
+            if st.button("🗑️  Limpiar", use_container_width=True, key="btn_limpiar_parrilla"):
+                for k in ('parrilla_df', 'parrilla_meta', 'parrilla_historial'):
+                    st.session_state.pop(k, None)
                 st.rerun()
-            except Exception as e:
-                status.update(label="Error al generar", state="error")
-                st.error(f"Error: {e}")
 
-    # ── Intentar cargar desde DB si no hay en sesión ───────────────────────────
-    if 'parrilla_df' not in st.session_state:
-        marca_nombre = brand.get('label', '')
-        try:
-            from database import get_parrilla_posts
-            db_posts = get_parrilla_posts(marca_nombre, año, mes)
-            if db_posts:
-                df_loaded = _posts_from_db(db_posts)
-                st.session_state['parrilla_df']        = df_loaded
-                st.session_state['parrilla_historial'] = []
-                st.session_state['parrilla_meta'] = {
-                    'marca': marca_nombre, 'año': año, 'mes': mes,
-                    'objetivo': '(guardada en base de datos)',
-                    'con_insights': False, 'insights_mes': '', 'brand': brand,
-                }
-                st.info(f"📂 Parrilla de **{MESES_ES[mes]} {año}** cargada desde la base de datos.")
-        except Exception:
-            pass
+        if not objetivo.strip():
+            st.caption("Selecciona o escribe un objetivo para habilitar la generación.")
+
+        # ── Generación ─────────────────────────────────────────────────────────────
+        if generate and objetivo.strip():
+            with st.status("Generando parrilla con IA…", expanded=True) as status:
+                raw_ctx = None
+                if ai_insights:
+                    st.write(f"Cargando análisis de Insights de {MESES_ES[prev_mes]} {prev_año}…")
+                else:
+                    st.write(f"Consultando datos de {MESES_ES[prev_mes]} {prev_año}…")
+                    raw_ctx = _get_raw_insights_context(brand.get('label', ''), prev_año, prev_mes)
+
+                n_esp = len(special_dates_selected)
+                st.write(f"Construyendo {len(pub_dates)} piezas regulares"
+                         + (f" + {n_esp} especiales" if n_esp else "") + "…")
+
+                prompt = _build_main_prompt(
+                    brand, año, mes, objetivo, pub_dates,
+                    special_dates_selected, ai_insights, raw_ctx,
+                )
+
+                _lbl = "Gemini 2.5 Flash" if _ai_provider() == 'gemini' else "Claude Sonnet"
+                st.write(f"Llamando a {_lbl} (20-60 segundos)…")
+                try:
+                    raw   = _call_claude_json(prompt)
+                    posts = _parse_json(raw)
+                    df    = _posts_to_df(posts)
+
+                    st.session_state['parrilla_df']        = df
+                    st.session_state['parrilla_historial'] = []
+                    st.session_state['parrilla_meta'] = {
+                        'marca':        brand.get('label', ''),
+                        'año':          año,
+                        'mes':          mes,
+                        'objetivo':     objetivo,
+                        'con_insights': bool(ai_insights),
+                        'insights_mes': f"{MESES_ES[prev_mes]} {prev_año}",
+                        'brand':        brand,
+                    }
+                    # Guardar en DB automáticamente
+                    try:
+                        _save_df_to_db(df, brand.get('label', ''), año, mes)
+                        st.write("✅ Guardado en base de datos.")
+                    except Exception:
+                        pass
+
+                    status.update(label=f"Parrilla lista: {len(df)} piezas", state="complete")
+                    st.rerun()
+                except Exception as e:
+                    status.update(label="Error al generar", state="error")
+                    st.error(f"Error: {e}")
+
+        # ── Intentar cargar desde DB si no hay en sesión ───────────────────────────
+        if 'parrilla_df' not in st.session_state:
+            marca_nombre = brand.get('label', '')
+            try:
+                from database import get_parrilla_posts
+                db_posts = get_parrilla_posts(marca_nombre, año, mes)
+                if db_posts:
+                    df_loaded = _posts_from_db(db_posts)
+                    st.session_state['parrilla_df']        = df_loaded
+                    st.session_state['parrilla_historial'] = []
+                    st.session_state['parrilla_meta'] = {
+                        'marca': marca_nombre, 'año': año, 'mes': mes,
+                        'objetivo': '(guardada en base de datos)',
+                        'con_insights': False, 'insights_mes': '', 'brand': brand,
+                    }
+                    st.info(f"📂 Parrilla de **{MESES_ES[mes]} {año}** cargada desde la base de datos.")
+            except Exception:
+                pass
 
     if 'parrilla_df' not in st.session_state:
         return
@@ -1812,7 +1835,11 @@ def show_parrilla():
     df = st.session_state['parrilla_df']
 
     # ── TABS ───────────────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 Parrilla", "📅 Calendario", "🟦 Monday.com", "🎨 Prompts de Imagen"])
+    if _is_visita:
+        tab1, tab2 = st.tabs(["📋 Parrilla", "📅 Calendario"])
+        tab3 = tab4 = None
+    else:
+        tab1, tab2, tab3, tab4 = st.tabs(["📋 Parrilla", "📅 Calendario", "🟦 Monday.com", "🎨 Prompts de Imagen"])
 
     # ═══ TAB 1: PARRILLA ════════════════════════════════════════════════════════
     with tab1:
@@ -1835,16 +1862,20 @@ def show_parrilla():
         if formato_opts:
             col_cfg['Formato'] = st.column_config.SelectboxColumn(options=formato_opts, width='medium')
 
-        edited_df = st.data_editor(
-            df, use_container_width=True, num_rows="dynamic",
-            column_config=col_cfg, height=550, key="parrilla_editor",
-        )
-        st.session_state['parrilla_df'] = edited_df
+        if _is_visita:
+            st.dataframe(df, use_container_width=True, height=550)
+            edited_df = df
+        else:
+            edited_df = st.data_editor(
+                df, use_container_width=True, num_rows="dynamic",
+                column_config=col_cfg, height=550, key="parrilla_editor",
+            )
+            st.session_state['parrilla_df'] = edited_df
 
         # Botones de guardar y descargar
         col_save, col_dl, col_info = st.columns([1.5, 1.5, 3])
         with col_save:
-            if st.button("💾  Guardar cambios", use_container_width=True, key="btn_guardar_parrilla"):
+            if not _is_visita and st.button("💾  Guardar cambios", use_container_width=True, key="btn_guardar_parrilla"):
                 try:
                     _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
                     # Sync estados to Monday if configured
@@ -1924,61 +1955,64 @@ def show_parrilla():
         cards_html += '</div>'
         st.markdown(cards_html, unsafe_allow_html=True)
 
-        # ── Cuadro de ajustes ──────────────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("### 💬 Ajustar Parrilla")
-        st.caption(
-            "Dile a Claude qué quieres cambiar: temas ya cubiertos, eventos próximos, "
-            "tono, redistribución de pilares, o cualquier otro ajuste."
-        )
-
-        if historial:
-            with st.expander(f"Historial de ajustes ({len(historial)})", expanded=False):
-                for i, h in enumerate(historial, 1):
-                    st.markdown(f"**Ajuste #{i}:** {h['pedido']}")
-                    st.markdown(f"*Claude:* {h['cambios']}")
-                    st.markdown("---")
-
-        pedido = st.text_area(
-            "¿Qué quieres cambiar?",
-            placeholder=(
-                "Ej: Los temas de posicionamiento ya los tengo cubiertos con 3 publicaciones. "
-                "Cámbiame esos posts por educación técnica o casos de uso. "
-                "Además, el post del lunes 7 hazlo sobre el lanzamiento del nuevo módulo de LPR."
-            ),
-            height=110,
-            key="parrilla_pedido_ajuste",
-        )
-
-        col_ajustar, col_sp = st.columns([2, 3])
-        with col_ajustar:
-            ajustar = st.button(
-                "🔄  Aplicar Ajuste",
-                type="primary", use_container_width=True,
-                disabled=not pedido.strip(),
-                key="btn_aplicar_ajuste",
+        # ── Cuadro de ajustes (solo usuarios con permisos de edición) ─────────
+        if _is_visita:
+            st.info("👤 Modo lectura — contacta al administrador para solicitar cambios.")
+        else:
+            st.markdown("---")
+            st.markdown("### 💬 Ajustar Parrilla")
+            st.caption(
+                "Dile a Claude qué quieres cambiar: temas ya cubiertos, eventos próximos, "
+                "tono, redistribución de pilares, o cualquier otro ajuste."
             )
 
-        if ajustar and pedido.strip():
-            current_posts = _df_to_posts(st.session_state['parrilla_df'])
-            adj_prompt    = _build_adjustment_prompt(
-                meta.get('brand', brand), current_posts, historial, pedido
+            if historial:
+                with st.expander(f"Historial de ajustes ({len(historial)})", expanded=False):
+                    for i, h in enumerate(historial, 1):
+                        st.markdown(f"**Ajuste #{i}:** {h['pedido']}")
+                        st.markdown(f"*Claude:* {h['cambios']}")
+                        st.markdown("---")
+
+            pedido = st.text_area(
+                "¿Qué quieres cambiar?",
+                placeholder=(
+                    "Ej: Los temas de posicionamiento ya los tengo cubiertos con 3 publicaciones. "
+                    "Cámbiame esos posts por educación técnica o casos de uso. "
+                    "Además, el post del lunes 7 hazlo sobre el lanzamiento del nuevo módulo de LPR."
+                ),
+                height=110,
+                key="parrilla_pedido_ajuste",
             )
-            try:
-                descripcion, new_posts = _call_adjustment(adj_prompt)
-                new_df = _posts_to_df(new_posts)
-                st.session_state['parrilla_df'] = new_df
-                historial.append({'pedido': pedido, 'cambios': descripcion or "Parrilla ajustada."})
-                st.session_state['parrilla_historial'] = historial
+
+            col_ajustar, col_sp = st.columns([2, 3])
+            with col_ajustar:
+                ajustar = st.button(
+                    "🔄  Aplicar Ajuste",
+                    type="primary", use_container_width=True,
+                    disabled=not pedido.strip(),
+                    key="btn_aplicar_ajuste",
+                )
+
+            if ajustar and pedido.strip():
+                current_posts = _df_to_posts(st.session_state['parrilla_df'])
+                adj_prompt    = _build_adjustment_prompt(
+                    meta.get('brand', brand), current_posts, historial, pedido
+                )
                 try:
-                    _save_df_to_db(new_df, meta.get('marca', ''), año, mes)
-                except Exception:
-                    pass
-                if descripcion:
-                    st.success(f"**Cambios realizados:** {descripcion}")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error al ajustar: {e}")
+                    descripcion, new_posts = _call_adjustment(adj_prompt)
+                    new_df = _posts_to_df(new_posts)
+                    st.session_state['parrilla_df'] = new_df
+                    historial.append({'pedido': pedido, 'cambios': descripcion or "Parrilla ajustada."})
+                    st.session_state['parrilla_historial'] = historial
+                    try:
+                        _save_df_to_db(new_df, meta.get('marca', ''), año, mes)
+                    except Exception:
+                        pass
+                    if descripcion:
+                        st.success(f"**Cambios realizados:** {descripcion}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al ajustar: {e}")
 
     # ═══ TAB 2: CALENDARIO ══════════════════════════════════════════════════════
     with tab2:
@@ -2024,7 +2058,8 @@ def show_parrilla():
             )
 
     # ═══ TAB 3: MONDAY.COM ══════════════════════════════════════════════════════
-    with tab3:
+    if not _is_visita:
+     with tab3:
         st.markdown("#### 🟦 Sincronizar con Monday.com")
         st.caption(
             "Exporta cada publicación de la parrilla como un ítem en tu tablero de Monday.com. "
@@ -2194,7 +2229,8 @@ def show_parrilla():
                         )
 
     # ═══ TAB 4: PROMPTS DE IMAGEN ════════════════════════════════════════════════
-    with tab4:
+    if not _is_visita:
+     with tab4:
         st.markdown("#### 🎨 Generador de Prompts de Imagen")
         st.caption(
             "Selecciona una publicación y genera prompts profesionales listos para pegar "

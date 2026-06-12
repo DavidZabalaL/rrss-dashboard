@@ -160,6 +160,11 @@ def _stream_quick_post(prompt):
 
 
 def show_post_quick():
+    _role = st.session_state.get('current_user', {}).get('role', 'viewer')
+    if _role == 'visita':
+        st.warning("No tienes permiso para usar este módulo.")
+        return
+
     st.title("✍️ Generador de Post Individual")
     st.caption(
         "Genera el copy para un post reactivo, una noticia del sector o cualquier contenido puntual. "
