@@ -427,7 +427,16 @@ def _edit_imagen_gemini(image_bytes, instruction):
     img_b64 = base64.b64encode(image_bytes).decode()
     url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
            f'gemini-2.5-flash-image:generateContent?key={key}')
+    _system = (
+        "Eres un editor de imágenes profesional. "
+        "Aplica exactamente la instrucción del usuario a la imagen. "
+        "REGLA OBLIGATORIA: cualquier texto visible en la imagen resultante "
+        "debe estar escrito en español. Si la instrucción pide añadir, cambiar "
+        "o reemplazar texto, escríbelo en español. "
+        "Puedes editar textos, colores, fondos, composición y elementos visuales."
+    )
     body = json.dumps({
+        'system_instruction': {'parts': [{'text': _system}]},
         'contents': [{
             'parts': [
                 {'inlineData': {'mimeType': 'image/png', 'data': img_b64}},
@@ -453,10 +462,17 @@ def _edit_imagen_gemini(image_bytes, instruction):
     raise RuntimeError('El modelo no devolvió imagen editada. Intenta con otra instrucción.')
 
 
+_SPANISH_TEXT_SUFFIX = (
+    " Any text visible in the image must be written in Spanish / "
+    "Cualquier texto visible en la imagen debe estar en español."
+)
+
+
 def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
     """Generates an image and returns raw image bytes."""
     import urllib.request
     key = _get_gemini_key()
+    _prompt = prompt_text + _SPANISH_TEXT_SUFFIX
 
     if quality == 'nano_banana':
         # Gemini 3 Pro Image Preview — generateContent with thinking
@@ -465,7 +481,7 @@ def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
         # Add aspect hint to the prompt
         aspect_hint = 'wide landscape format' if aspect_ratio == '16:9' else 'square format'
         body = json.dumps({
-            'contents': [{'parts': [{'text': f'{prompt_text}, {aspect_hint}'}]}],
+            'contents': [{'parts': [{'text': f'{_prompt}, {aspect_hint}'}]}],
             'generationConfig': {'responseModalities': ['IMAGE']},
         }).encode()
         req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
@@ -488,7 +504,7 @@ def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
         url   = (f'https://generativelanguage.googleapis.com/v1beta/models/'
                  f'{model}:predict?key={key}')
         body  = json.dumps({
-            'instances':  [{'prompt': prompt_text}],
+            'instances':  [{'prompt': _prompt}],
             'parameters': {'sampleCount': 1, 'aspectRatio': aspect_ratio},
         }).encode()
         req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
@@ -2466,12 +2482,14 @@ def show_parrilla():
                     _up_instr = st.text_area(
                         "Instrucción de edición",
                         placeholder=(
-                            "Ej: Cambia el fondo a azul oscuro\n"
-                            "Agrega iluminación nocturna\n"
-                            "Quita el texto de la imagen\n"
-                            "Hazla más minimalista"
+                            "Ejemplos de lo que puedes pedir:\n"
+                            "• Cambia el título a 'Seguridad Pública Inteligente'\n"
+                            "• Agrega el texto 'Kabat One' en la parte inferior\n"
+                            "• Reemplaza el texto del botón por 'Contáctanos'\n"
+                            "• Cambia el fondo a azul oscuro\n"
+                            "• Agrega iluminación nocturna con tonos neón"
                         ),
-                        height=120,
+                        height=140,
                         key="img_upload_instr",
                     )
 
@@ -2667,8 +2685,12 @@ def show_parrilla():
                                     if _edit_open:
                                         _edit_inst = st.text_area(
                                             "Instrucción de edición",
-                                            placeholder="Ej: cambia el fondo a azul oscuro, agrega efecto de luz neón, quita el texto...",
-                                            height=80,
+                                            placeholder=(
+                                                "Ej: Cambia el título a 'Innovación'\n"
+                                                "Agrega texto 'Kabat One' abajo\n"
+                                                "Cambia fondo a azul oscuro"
+                                            ),
+                                            height=100,
                                             key=f"ta_edit_sl_{_gsl['numero']}",
                                             label_visibility="collapsed",
                                         )
@@ -3002,12 +3024,15 @@ def show_parrilla():
                                 _edit_instr = st.text_area(
                                     "Instrucción de edición",
                                     placeholder=(
-                                        "Ej: Agrega más vegetación en primer plano\n"
-                                        "Cambia el cielo a atardecer\n"
-                                        "Quita los vehículos y deja solo la infraestructura\n"
-                                        "Hace la escena más nocturna con iluminación azul"
+                                        "Ejemplos de lo que puedes pedir:\n"
+                                        "• Cambia el título a 'Innovación en Seguridad'\n"
+                                        "• Agrega el texto 'Soluciones para el Sector Público'\n"
+                                        "• Quita el texto y deja solo la imagen\n"
+                                        "• Cambia el cielo a atardecer\n"
+                                        "• Agrega más vegetación en primer plano\n"
+                                        "• Hazla más nocturna con iluminación azul"
                                     ),
-                                    height=130,
+                                    height=150,
                                     key="img4_edit_instr",
                                 )
 
