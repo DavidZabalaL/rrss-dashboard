@@ -197,6 +197,44 @@ def _ai_provider():
         return 'gemini'
 
 
+def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20):
+    """Overlay the brand logo on the generated image. Returns PNG bytes."""
+    from PIL import Image
+    import io
+
+    brand_id   = brand.get('brand_id', '')
+    logo_path  = ROOT / 'marca' / brand_id / 'logos' / 'white.png'
+    if not logo_path.exists():
+        return img_bytes  # no logo found, return original
+
+    base_img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+    logo_img = Image.open(str(logo_path)).convert('RGBA')
+
+    bw, bh   = base_img.size
+    # Resize logo so its width = logo_pct of image width
+    logo_w   = int(bw * logo_pct)
+    ratio    = logo_w / logo_img.width
+    logo_h   = int(logo_img.height * ratio)
+    logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
+
+    pad = int(bw * 0.03)
+    if position == 'bottom-right':
+        x = bw - logo_w - pad
+        y = bh - logo_h - pad
+    elif position == 'bottom-left':
+        x, y = pad, bh - logo_h - pad
+    elif position == 'top-right':
+        x, y = bw - logo_w - pad, pad
+    else:  # top-left
+        x, y = pad, pad
+
+    base_img.paste(logo_img, (x, y), logo_img)
+
+    out = io.BytesIO()
+    base_img.convert('RGB').save(out, format='PNG')
+    return out.getvalue()
+
+
 def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
     """Generates an image and returns raw image bytes."""
     import urllib.request, base64
@@ -2239,6 +2277,7 @@ def show_parrilla():
                             with st.spinner(f"Imagen 4 generando… ({_spin_lbl[_quality]} segundos)"):
                                 try:
                                     _img_bytes = _generate_imagen(_prompt_gen, _aspect4, _quality)
+                                    _img_bytes = _composite_logo(_img_bytes, brand)
                                     st.session_state[_img4_cache] = {
                                         'bytes': _img_bytes,
                                         'aspect': _aspect_lbl,
