@@ -320,17 +320,20 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     set freely at any time without triggering Streamlit's
     'cannot be modified after widget is instantiated' error.
     """
-    _open_key = f"_la_open_{key_prefix}"
-    _cust_key = f"_la_cust_{key_prefix}"
+    # _la_panel_ prefix — intentionally different from the old _la_open_ widget key
+    # so that any lingering browser session state from the previous st.toggle
+    # implementation does not interfere with setting this plain variable.
+    _panel_key = f"_la_panel_{key_prefix}"
+    _cust_key  = f"_la_cust_{key_prefix}"
 
-    _is_open = st.session_state.get(_open_key, False)
+    _is_open = st.session_state.get(_panel_key, False)
 
-    # Plain button for open/close — _open_key stays a plain session-state variable,
-    # never owned by a widget, so we can set it freely including inside Apply.
+    # Plain button for open/close — _panel_key is never used as a widget key=,
+    # so Streamlit never "owns" it and it can be set freely at any point.
     _btn_lbl = "✕ Cerrar logo" if _is_open else "🏷️ Agregar logo"
     if st.button(_btn_lbl, key=f"_la_btn_{key_prefix}"):
         _is_open = not _is_open
-        st.session_state[_open_key] = _is_open
+        st.session_state[_panel_key] = _is_open
 
     if not _is_open:
         return None
@@ -415,7 +418,7 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
                 logo_variant=_final_var,
                 custom_logo_bytes=_final_cust,
             )
-            st.session_state[_open_key] = False  # safe: not a widget-owned key
+            st.session_state[_panel_key] = False  # safe: not a widget-owned key
             return _result
         except Exception as _le:
             st.error(f"Error al aplicar logo: {_le}")
