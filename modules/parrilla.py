@@ -2055,7 +2055,7 @@ def show_parrilla():
         except Exception:
             pass
 
-    if not _is_visita and 'parrilla_df' not in st.session_state and _monday_configured():
+    if not _is_visita and 'parrilla_df' not in st.session_state:
         st.markdown("---")
         st.info(
             f"📭 No se encontró parrilla para **{brand.get('label','')} · {MESES_ES[mes]} {año}** "
@@ -2067,31 +2067,34 @@ def show_parrilla():
             if st.button("📥 Recuperar desde Monday.com",
                          key="btn_monday_recover_top",
                          type="primary", use_container_width=True):
-                with st.spinner("Importando desde Monday.com…"):
-                    try:
-                        _rp = _monday_fetch_parrilla(
-                            _monday_api_key(), _monday_board_id(),
-                            brand.get('label', ''), año, mes,
-                        )
-                        if not _rp:
-                            st.warning(
-                                "No se encontraron ítems en Monday para ese mes y marca. "
-                                "Verifica que el grupo del tablero tenga el nombre de la marca."
+                if not _monday_configured():
+                    st.error("Monday.com no está configurado. Agrega MONDAY_API_KEY y MONDAY_BOARD_ID en los secrets.")
+                else:
+                    with st.spinner("Importando desde Monday.com…"):
+                        try:
+                            _rp = _monday_fetch_parrilla(
+                                _monday_api_key(), _monday_board_id(),
+                                brand.get('label', ''), año, mes,
                             )
-                        else:
-                            _rdf = _posts_to_df(_rp)
-                            _save_df_to_db(_rdf, brand.get('label', ''), año, mes)
-                            st.session_state['parrilla_df']        = _rdf
-                            st.session_state['parrilla_historial'] = []
-                            st.session_state['parrilla_meta'] = {
-                                'marca': brand.get('label', ''), 'año': año, 'mes': mes,
-                                'objetivo': '(recuperada desde Monday.com)',
-                                'con_insights': False, 'insights_mes': '', 'brand': brand,
-                            }
-                            st.success(f"✅ {len(_rp)} publicaciones recuperadas desde Monday.com.")
-                            st.rerun()
-                    except Exception as _re:
-                        st.error(f"Error al recuperar: {_re}")
+                            if not _rp:
+                                st.warning(
+                                    "No se encontraron ítems en Monday para ese mes y marca. "
+                                    "Verifica que el grupo del tablero tenga el nombre de la marca."
+                                )
+                            else:
+                                _rdf = _posts_to_df(_rp)
+                                _save_df_to_db(_rdf, brand.get('label', ''), año, mes)
+                                st.session_state['parrilla_df']        = _rdf
+                                st.session_state['parrilla_historial'] = []
+                                st.session_state['parrilla_meta'] = {
+                                    'marca': brand.get('label', ''), 'año': año, 'mes': mes,
+                                    'objetivo': '(recuperada desde Monday.com)',
+                                    'con_insights': False, 'insights_mes': '', 'brand': brand,
+                                }
+                                st.success(f"✅ {len(_rp)} publicaciones recuperadas desde Monday.com.")
+                                st.rerun()
+                        except Exception as _re:
+                            st.error(f"Error al recuperar: {_re}")
         st.markdown("---")
 
     # ── Fechas especiales — investigación automática ───────────────────────────
