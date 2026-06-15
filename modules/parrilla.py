@@ -467,6 +467,133 @@ _SPANISH_TEXT_SUFFIX = (
     "Cualquier texto visible en la imagen debe estar en español."
 )
 
+# Font search paths — tried in order, first match wins
+_FONT_PATHS = [
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf',
+    '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+    '/System/Library/Fonts/Helvetica.ttc',
+    '/System/Library/Fonts/SFNS.ttf',
+    'C:/Windows/Fonts/arialbd.ttf',
+    'C:/Windows/Fonts/arial.ttf',
+]
+
+
+def _load_font(size):
+    """Return the best available PIL font at the given size."""
+    from PIL import ImageFont
+    for fp in _FONT_PATHS:
+        try:
+            return ImageFont.truetype(fp, size)
+        except Exception:
+            pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _add_slide_text(img_bytes, titulo, subtitulo, numero, total):
+    """
+    Overlay title + slide indicator on a carousel image using PIL.
+    Returns PNG bytes. Always renders text so it's guaranteed to be in Spanish.
+    """
+    from PIL import Image, ImageDraw
+    if not titulo:
+        return img_bytes
+
+    img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+    w, h = img.size
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    title_size = max(34, h // 16)
+    sub_size   = max(22, h // 26)
+    ind_size   = max(18, h // 38)
+    f_title = _load_font(title_size)
+    f_sub   = _load_font(sub_size)
+    f_ind   = _load_font(ind_size)
+
+    def _wrap(text, max_px, font, max_lines=2):
+        words = text.split()
+        lines, cur = [], ''
+        for word in words:
+            test = (cur + ' ' + word).strip()
+            try:
+                tw = draw.textbbox((0, 0), test, font=font)[2]
+            except Exception:
+                tw = len(test) * title_size // 2
+            if tw <= max_px:
+                cur = test
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = word
+        if cur:
+            lines.append(cur)
+        return lines[:max_lines]
+
+    pad_x   = int(w * 0.06)
+    max_txt = w - pad_x * 2
+
+    title_lines = _wrap(titulo, max_txt, f_title, 2)
+    sub_lines   = _wrap(subtitulo, max_txt, f_sub, 2) if subtitulo else []
+
+    lh_title = title_size + 10
+    lh_sub   = sub_size + 8
+    inner_h  = len(title_lines) * lh_title + (len(sub_lines) * lh_sub + 8 if sub_lines else 0)
+    strip_h  = inner_h + 48
+
+    # Gradient-like dark strip at the bottom
+    for _yi in range(strip_h + 20):
+        alpha = int(220 * min(1.0, (_yi / 20) ** 0.5)) if _yi < 20 else 220
+        draw.rectangle([(0, h - strip_h - 20 + _yi), (w, h - strip_h - 19 + _yi)],
+                       fill=(10, 12, 24, alpha))
+
+    # Title text
+    y = h - strip_h + 20
+    for line in title_lines:
+        try:
+            tw = draw.textbbox((0, 0), line, font=f_title)[2]
+        except Exception:
+            tw = len(line) * title_size // 2
+        x = max(pad_x, (w - tw) // 2)
+        draw.text((x + 2, y + 2), line, font=f_title, fill=(0, 0, 0, 180))
+        draw.text((x, y), line, font=f_title, fill=(255, 255, 255, 255))
+        y += lh_title
+
+    # Subtitle
+    if sub_lines:
+        y += 4
+        for line in sub_lines:
+            try:
+                tw = draw.textbbox((0, 0), line, font=f_sub)[2]
+            except Exception:
+                tw = len(line) * sub_size // 2
+            x = max(pad_x, (w - tw) // 2)
+            draw.text((x, y), line, font=f_sub, fill=(200, 215, 240, 230))
+            y += lh_sub
+
+    # Slide indicator badge — top right
+    ind = f'{numero} / {total}'
+    try:
+        ib = draw.textbbox((0, 0), ind, font=f_ind)
+        iw, ih = ib[2] - ib[0], ib[3] - ib[1]
+    except Exception:
+        iw, ih = len(ind) * ind_size // 2, ind_size
+    bp = int(w * 0.035)
+    bx1, by1 = w - iw - bp * 2 - 4, bp
+    bx2, by2 = w - bp, bp + ih + 12
+    draw.rectangle([bx1, by1, bx2, by2], fill=(10, 12, 24, 180))
+    draw.text((bx1 + bp, by1 + 6), ind, font=f_ind, fill=(200, 215, 240, 230))
+
+    result = Image.alpha_composite(img, overlay)
+    out = io.BytesIO()
+    result.convert('RGB').save(out, format='PNG')
+    return out.getvalue()
+
 
 def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
     """Generates an image and returns raw image bytes."""
@@ -1104,7 +1231,8 @@ ESTRUCTURA NARRATIVA:
   - Slide {n_slides}: CTA — llamado a la acción, contacto, próximo paso
 
 Para CADA slide genera:
-- titulo_slide: texto corto (máximo 8 palabras en español) que iría como copy principal
+- titulo_slide: texto corto (máximo 8 palabras en español) — copy principal visible sobre la imagen
+- subtitulo: frase de apoyo (máximo 10 palabras en español) que complementa el título; en slide CTA puede ser el CTA directo
 - escena: descripción de la escena visual específica (80-120 palabras en INGLÉS).
   Describe QUÉ mostrar: sujetos, elementos tecnológicos, composición, plano, ambiente, acción narrativa.
   Incluye los colores de marca {primary}/{secondary} como acentos de iluminación o elementos.
@@ -1114,10 +1242,10 @@ Responde SOLO con JSON válido, sin texto antes ni después:
 {{
   "titulo_carrusel": "(título general, máximo 10 palabras en español)",
   "slides": [
-    {{"numero": 1, "tipo": "portada",   "titulo_slide": "...", "escena": "..."}},
-    {{"numero": 2, "tipo": "contenido", "titulo_slide": "...", "escena": "..."}},
+    {{"numero": 1, "tipo": "portada",   "titulo_slide": "...", "subtitulo": "...", "escena": "..."}},
+    {{"numero": 2, "tipo": "contenido", "titulo_slide": "...", "subtitulo": "...", "escena": "..."}},
     ...
-    {{"numero": {n_slides}, "tipo": "cta", "titulo_slide": "...", "escena": "..."}}
+    {{"numero": {n_slides}, "tipo": "cta", "titulo_slide": "...", "subtitulo": "...", "escena": "..."}}
   ]
 }}"""
 
@@ -2628,6 +2756,13 @@ def show_parrilla():
                             _fp = f"{_sl['escena']}\n\n{_master}" if _master else _sl['escena']
                             try:
                                 _sb = _generate_imagen(_fp, '1:1', _car_q)
+                                _sb = _add_slide_text(
+                                    _sb,
+                                    _sl.get('titulo_slide', ''),
+                                    _sl.get('subtitulo', ''),
+                                    _sl['numero'],
+                                    _car_n,
+                                )
                                 _car_imgs.append({
                                     'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
                                     'titulo': _sl.get('titulo_slide',''), 'bytes': _sb,
