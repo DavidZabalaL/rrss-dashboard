@@ -2510,7 +2510,7 @@ def show_parrilla():
             board_info_key = f"monday_board_info_{board_id}"
             if board_info_key not in st.session_state:
                 try:
-                    bname, bcols = _monday_get_board_info(api_key, board_id)
+                    bname, bcols, _ = _monday_get_board_info(api_key, board_id)
                     st.session_state[board_info_key] = {'name': bname, 'cols': bcols}
                 except Exception as e:
                     st.session_state[board_info_key] = {'error': str(e)}
