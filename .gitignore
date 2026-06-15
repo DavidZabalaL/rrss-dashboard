@@ -40,5 +40,8 @@ Thumbs.db
 Kabat one/
 SYM/
 
+# Base de datos local — cada entorno mantiene su propia copia
+data/
+
 # Logs
 *.log

@@ -382,7 +382,7 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             if st.button("🗑️", key=f"_la_rmcust_{key_prefix}", help="Quitar logo propio"):
                 st.session_state.pop(_cust_key, None)
 
-    # Position
+    # Position + size in two columns
     _pos_opts = {
         '↘ Inf. derecha':   'bottom-right',
         '↙ Inf. izquierda': 'bottom-left',
@@ -390,35 +390,50 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
         '↖ Sup. izquierda': 'top-left',
         '🔲 Centro':         'center',
     }
-    _sel_pos = st.selectbox(
-        "Posición",
-        list(_pos_opts.keys()),
-        key=f"_la_pos_sel_{key_prefix}",
-    )
+    _col_pos, _col_sz = st.columns([3, 2])
+    with _col_pos:
+        _sel_pos = st.selectbox(
+            "Posición",
+            list(_pos_opts.keys()),
+            key=f"_la_pos_sel_{key_prefix}",
+        )
+    with _col_sz:
+        _pct_val = st.slider(
+            "Tamaño (%)", min_value=8, max_value=40,
+            value=20, step=2,
+            key=f"_la_pct_sl_{key_prefix}",
+        )
 
-    # Size
-    _pct_val = st.slider(
-        "Tamaño del logo (%)", min_value=8, max_value=40,
-        value=20, step=2,
-        key=f"_la_pct_sl_{key_prefix}",
-    )
+    # Live preview — updates automatically on every control change
+    _prev_var  = st.session_state.get(f"_la_var_{key_prefix}", _avail_vars[0] if _avail_vars else 'white')
+    if _has_custom:
+        _prev_var = 'white'
+    _prev_pos  = _pos_opts.get(_sel_pos, 'bottom-right')
+    _prev_pct  = _pct_val / 100
+    _prev_cust = st.session_state.get(_cust_key) if _has_custom else None
+    try:
+        _preview_bytes = _composite_logo(
+            img_bytes, brand,
+            position=_prev_pos,
+            logo_pct=_prev_pct,
+            logo_variant=_prev_var,
+            custom_logo_bytes=_prev_cust,
+        )
+        st.caption("Vista previa:")
+        st.image(_preview_bytes, use_container_width=True)
+    except Exception:
+        pass
 
     if st.button("✅ Aplicar logo", key=f"_la_apply_{key_prefix}", type="primary", use_container_width=True):
-        _final_var  = st.session_state.get(f"_la_var_{key_prefix}", _avail_vars[0] if _avail_vars else 'white')
-        if _has_custom:
-            _final_var = 'white'
-        _final_pos  = _pos_opts.get(_sel_pos, 'bottom-right')
-        _final_pct  = _pct_val / 100
-        _final_cust = st.session_state.get(_cust_key) if _has_custom else None
         try:
             _result = _composite_logo(
                 img_bytes, brand,
-                position=_final_pos,
-                logo_pct=_final_pct,
-                logo_variant=_final_var,
-                custom_logo_bytes=_final_cust,
+                position=_prev_pos,
+                logo_pct=_prev_pct,
+                logo_variant=_prev_var,
+                custom_logo_bytes=_prev_cust,
             )
-            st.session_state[_panel_key] = False  # safe: not a widget-owned key
+            st.session_state[_panel_key] = False
             return _result
         except Exception as _le:
             st.error(f"Error al aplicar logo: {_le}")
@@ -2862,7 +2877,10 @@ def show_parrilla():
                     )
                     _logo_res_up = _logo_adder_ui("up_editor_main", _up_current, brand)
                     if _logo_res_up is not None:
-                        _up_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_up})
+                        if _up_hist and _up_hist[-1].get('instruction') == '[logo agregado]':
+                            _up_hist[-1] = {'instruction': '[logo agregado]', 'bytes': _logo_res_up}
+                        else:
+                            _up_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_up})
                         st.rerun()
 
                 with _col_up_ctrl:
@@ -3407,7 +3425,10 @@ def show_parrilla():
                                 )
                                 _logo_res_img4 = _logo_adder_ui(f"img4_{_img4_cache}", _cur_bytes, brand)
                                 if _logo_res_img4 is not None:
-                                    _edit_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_img4})
+                                    if _edit_hist and _edit_hist[-1].get('instruction') == '[logo agregado]':
+                                        _edit_hist[-1] = {'instruction': '[logo agregado]', 'bytes': _logo_res_img4}
+                                    else:
+                                        _edit_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_img4})
                                     st.rerun()
 
                             with _col_ctrl_ed:
