@@ -1530,7 +1530,7 @@ def _posts_from_db(db_posts):
 
 
 def _github_sync_db():
-    """Commit the SQLite DB to GitHub so it persists across Streamlit Cloud reboots.
+    """Commit the SQLite DB to GitHub via Git Data API (supports up to 100 MB).
 
     Uses only stdlib (urllib.request, base64, json).
     Returns True on success, False on any failure (never raises).
@@ -1540,45 +1540,50 @@ def _github_sync_db():
         from database import DB_PATH as _db_path
 
         _load_env()
-        token = os.environ.get('GITHUB_TOKEN', '').strip()
-        repo  = os.environ.get('GITHUB_REPO', '').strip()
-        if not token or not repo:
+        token  = os.environ.get('GITHUB_TOKEN', '').strip()
+        repo   = os.environ.get('GITHUB_REPO',  '').strip()
+        branch = 'main'
+        path   = 'data/rrss.db'
+        if not token or not repo or not _db_path.exists():
             return False
 
-        if not _db_path.exists():
-            return False
+        api    = f"https://api.github.com/repos/{repo}"
+        hdrs   = {'Authorization': f'token {token}',
+                  'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json'}
+        db_b64 = base64.b64encode(_db_path.read_bytes()).decode('ascii')
 
-        db_bytes  = _db_path.read_bytes()
-        db_b64    = base64.b64encode(db_bytes).decode('ascii')
-        api_url   = f"https://api.github.com/repos/{repo}/contents/data/rrss.db"
-        headers   = {
-            'Authorization': f'token {token}',
-            'Accept':        'application/vnd.github+json',
-            'Content-Type':  'application/json',
-        }
+        def _req(method, url, body=None):
+            data = json.dumps(body).encode() if body else None
+            req  = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
 
-        # GET current SHA (required for updates; absent means new file)
-        sha = None
-        try:
-            req_get = urllib.request.Request(api_url, headers=headers, method='GET')
-            with urllib.request.urlopen(req_get, timeout=15) as resp:
-                sha = json.loads(resp.read().decode('utf-8')).get('sha')
-        except Exception:
-            pass  # file may not exist yet — that's fine
+        # 1. Create blob
+        blob_sha = _req('POST', f"{api}/git/blobs",
+                        {"content": db_b64, "encoding": "base64"})["sha"]
 
-        payload = {
-            'message':   'sync: auto-backup RRSS database',
-            'content':   db_b64,
-            'committer': {'name': 'RRSS App', 'email': 'rrss@kabat.com'},
-        }
-        if sha:
-            payload['sha'] = sha
+        # 2. Get HEAD commit SHA
+        head_sha = _req('GET', f"{api}/git/refs/heads/{branch}")["object"]["sha"]
 
-        data = json.dumps(payload).encode('utf-8')
-        req_put = urllib.request.Request(api_url, data=data, headers=headers, method='PUT')
-        with urllib.request.urlopen(req_put, timeout=30) as resp:
-            status = resp.status
-        return status in (200, 201)
+        # 3. Get current tree SHA
+        tree_sha = _req('GET', f"{api}/git/commits/{head_sha}")["tree"]["sha"]
+
+        # 4. Create new tree
+        new_tree = _req('POST', f"{api}/git/trees",
+                        {"base_tree": tree_sha,
+                         "tree": [{"path": path, "mode": "100644",
+                                   "type": "blob", "sha": blob_sha}]})["sha"]
+
+        # 5. Create commit
+        new_commit = _req('POST', f"{api}/git/commits",
+                          {"message": "sync: auto-backup RRSS database",
+                           "tree": new_tree, "parents": [head_sha],
+                           "committer": {"name": "RRSS App", "email": "rrss@kabat.com"}})["sha"]
+
+        # 6. Update branch ref
+        _req('PATCH', f"{api}/git/refs/heads/{branch}", {"sha": new_commit})
+        return True
     except Exception:
         return False
 

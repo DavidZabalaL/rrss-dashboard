@@ -1,4 +1,4 @@
-# sync.py — Sincronización opcional con GitHub
+# sync.py — Sincronización con GitHub usando Git Data API (soporta hasta 100 MB)
 #
 # Configura en .streamlit/secrets.toml:
 #   GITHUB_TOKEN   = "ghp_..."
@@ -9,6 +9,8 @@ import base64
 import requests
 import streamlit as st
 from database import DB_PATH
+
+_BRANCH = "main"
 
 
 def _cfg():
@@ -22,8 +24,8 @@ def _cfg():
         return "", "", ""
 
 
-def _headers(token):
-    return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+def _h(token):
+    return {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
 
 
 def github_configured():
@@ -32,47 +34,89 @@ def github_configured():
 
 
 def pull():
-    """Descarga la BD desde GitHub → local. Retorna True si exitoso."""
+    """Descarga la BD desde GitHub → local. Soporta archivos grandes."""
     token, repo, path = _cfg()
     if not token or not repo:
         return False
-    url  = f"https://api.github.com/repos/{repo}/contents/{path}"
-    resp = requests.get(url, headers=_headers(token), timeout=30, stream=True)
-    if resp.status_code != 200:
+    api = f"https://api.github.com/repos/{repo}"
+
+    # Obtener SHA del HEAD
+    r = requests.get(f"{api}/git/refs/heads/{_BRANCH}", headers=_h(token), timeout=15)
+    if r.status_code != 200:
         return False
-    data = resp.json()
-    # GitHub Contents API tiene límite de ~1 MB; archivos más grandes
-    # devuelven content vacío pero incluyen download_url para descarga directa.
-    raw_content = data.get("content", "").replace("\n", "")
-    if raw_content:
-        content = base64.b64decode(raw_content)
-    elif data.get("download_url"):
-        dl = requests.get(data["download_url"], timeout=60, stream=True)
-        dl.raise_for_status()
-        content = b"".join(dl.iter_content(chunk_size=65536))
-    else:
+    head_sha = r.json()["object"]["sha"]
+
+    # Obtener el árbol del commit (recursive para encontrar el archivo)
+    r = requests.get(f"{api}/git/trees/{head_sha}?recursive=1", headers=_h(token), timeout=30)
+    if r.status_code != 200:
         return False
+    tree = r.json().get("tree", [])
+    blob = next((n for n in tree if n["path"] == path), None)
+    if not blob:
+        return False
+
+    # Descargar el blob directamente (sin límite de tamaño)
+    r = requests.get(f"{api}/git/blobs/{blob['sha']}", headers=_h(token), timeout=60)
+    if r.status_code != 200:
+        return False
+    content = base64.b64decode(r.json()["content"].replace("\n", ""))
     DB_PATH.parent.mkdir(exist_ok=True)
     DB_PATH.write_bytes(content)
     return True
 
 
 def push():
-    """Sube la BD local → GitHub. Retorna True si exitoso."""
+    """Sube la BD local → GitHub usando Git Data API. Sin límite de 1 MB."""
     token, repo, path = _cfg()
     if not token or not repo or not DB_PATH.exists():
         return False
-    content = base64.b64encode(DB_PATH.read_bytes()).decode()
-    url     = f"https://api.github.com/repos/{repo}/contents/{path}"
-    # Obtener SHA actual si el archivo ya existe
-    r = requests.get(url, headers=_headers(token), timeout=15)
-    sha = r.json().get("sha", "") if r.status_code == 200 else ""
-    payload = {
-        "message": "sync: update RRSS database",
-        "content": content,
-        "committer": {"name": "RRSS Bot", "email": "bot@rrss.local"},
-    }
-    if sha:
-        payload["sha"] = sha
-    resp = requests.put(url, json=payload, headers=_headers(token), timeout=30)
-    return resp.status_code in (200, 201)
+
+    api     = f"https://api.github.com/repos/{repo}"
+    db_b64  = base64.b64encode(DB_PATH.read_bytes()).decode()
+
+    # 1. Crear blob con el contenido del archivo
+    r = requests.post(f"{api}/git/blobs",
+                      json={"content": db_b64, "encoding": "base64"},
+                      headers=_h(token), timeout=60)
+    if r.status_code not in (200, 201):
+        return False
+    blob_sha = r.json()["sha"]
+
+    # 2. Obtener el SHA del commit HEAD
+    r = requests.get(f"{api}/git/refs/heads/{_BRANCH}", headers=_h(token), timeout=15)
+    if r.status_code != 200:
+        return False
+    head_sha   = r.json()["object"]["sha"]
+
+    # 3. Obtener el SHA del árbol del commit actual
+    r = requests.get(f"{api}/git/commits/{head_sha}", headers=_h(token), timeout=15)
+    if r.status_code != 200:
+        return False
+    tree_sha = r.json()["tree"]["sha"]
+
+    # 4. Crear nuevo árbol con el archivo actualizado
+    r = requests.post(f"{api}/git/trees",
+                      json={"base_tree": tree_sha,
+                            "tree": [{"path": path, "mode": "100644",
+                                      "type": "blob", "sha": blob_sha}]},
+                      headers=_h(token), timeout=30)
+    if r.status_code not in (200, 201):
+        return False
+    new_tree_sha = r.json()["sha"]
+
+    # 5. Crear commit
+    r = requests.post(f"{api}/git/commits",
+                      json={"message": "sync: update RRSS database",
+                            "tree": new_tree_sha,
+                            "parents": [head_sha],
+                            "committer": {"name": "RRSS Bot", "email": "bot@rrss.local"}},
+                      headers=_h(token), timeout=30)
+    if r.status_code not in (200, 201):
+        return False
+    new_commit_sha = r.json()["sha"]
+
+    # 6. Actualizar la referencia del branch
+    r = requests.patch(f"{api}/git/refs/heads/{_BRANCH}",
+                       json={"sha": new_commit_sha},
+                       headers=_h(token), timeout=15)
+    return r.status_code in (200, 201)
