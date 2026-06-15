@@ -1648,7 +1648,7 @@ def _monday_get_board_info(api_key, board_id):
 
 
 def _monday_find_group(groups, marca):
-    """Returns group_id matching the brand name, or None."""
+    """Returns group_id matching the brand name (brand-only, legacy). or None."""
     marca_lower = marca.lower()
     for g in groups:
         title = g.get('title', '').lower()
@@ -1657,6 +1657,44 @@ def _monday_find_group(groups, marca):
         if 'sym' in marca_lower and 'sym' in title:
             return g['id']
     return None
+
+
+def _monday_find_group_month(groups, marca, año, mes):
+    """Returns group_id matching brand + month + year, or None."""
+    marca_lower = marca.lower()
+    mes_lower   = MESES_ES[mes].lower()
+    año_str     = str(año)
+    for g in groups:
+        title = g.get('title', '').lower()
+        brand_match = (('kabat' in marca_lower and 'kabat' in title) or
+                       ('sym'   in marca_lower and 'sym'   in title))
+        month_match = mes_lower in title and año_str in title
+        if brand_match and month_match:
+            return g['id']
+    return None
+
+
+def _monday_create_group(api_key, board_id, group_name):
+    """Creates a new group in the board. Returns group_id or None."""
+    mutation = """mutation ($boardId: ID!, $name: String!) {
+      create_group(board_id: $boardId, group_name: $name) {
+        id title
+      }
+    }"""
+    try:
+        data = _monday_request(api_key, mutation, {"boardId": str(board_id), "name": group_name})
+        return data.get('create_group', {}).get('id')
+    except Exception:
+        return None
+
+
+def _monday_ensure_group(api_key, board_id, groups, marca, año, mes):
+    """Find or create the month-specific group. Returns group_id or None."""
+    group_id = _monday_find_group_month(groups, marca, año, mes)
+    if group_id:
+        return group_id
+    group_name = f"{marca} · {MESES_ES[mes]} {año}"
+    return _monday_create_group(api_key, board_id, group_name)
 
 
 def _monday_match_columns(columns):
@@ -1867,7 +1905,9 @@ def _monday_fetch_parrilla(api_key, board_id, marca, año, mes):
     Returns list of post dicts compatible with _posts_to_df()."""
     board_name, columns, groups = _monday_get_board_info(api_key, board_id)
     col_map  = _monday_match_columns(columns)
-    group_id = _monday_find_group(groups, marca)
+    # Prefer month-specific group; fall back to brand-only legacy group
+    group_id = (_monday_find_group_month(groups, marca, año, mes) or
+                _monday_find_group(groups, marca))
 
     if not group_id:
         raise ValueError(f"No se encontró grupo para '{marca}' en el tablero de Monday.")
@@ -1971,7 +2011,10 @@ def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
 
     board_name, columns, groups = _monday_get_board_info(api_key, board_id)
     col_map  = _monday_match_columns(columns)
-    group_id = _monday_find_group(groups, marca)
+    group_id = _monday_ensure_group(api_key, board_id, groups, marca, año, mes)
+
+    if not group_id:
+        raise ValueError(f"No se pudo encontrar o crear el grupo para '{marca}' en Monday.")
 
     # Field-to-post-key mapping
     _FIELD_MAP = {
