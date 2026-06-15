@@ -1529,9 +1529,67 @@ def _posts_from_db(db_posts):
     return _posts_to_df(posts)
 
 
+def _github_sync_db():
+    """Commit the SQLite DB to GitHub so it persists across Streamlit Cloud reboots.
+
+    Uses only stdlib (urllib.request, base64, json).
+    Returns True on success, False on any failure (never raises).
+    """
+    try:
+        import urllib.request
+        from database import DB_PATH as _db_path
+
+        _load_env()
+        token = os.environ.get('GITHUB_TOKEN', '').strip()
+        repo  = os.environ.get('GITHUB_REPO', '').strip()
+        if not token or not repo:
+            return False
+
+        if not _db_path.exists():
+            return False
+
+        db_bytes  = _db_path.read_bytes()
+        db_b64    = base64.b64encode(db_bytes).decode('ascii')
+        api_url   = f"https://api.github.com/repos/{repo}/contents/data/rrss.db"
+        headers   = {
+            'Authorization': f'token {token}',
+            'Accept':        'application/vnd.github+json',
+            'Content-Type':  'application/json',
+        }
+
+        # GET current SHA (required for updates; absent means new file)
+        sha = None
+        try:
+            req_get = urllib.request.Request(api_url, headers=headers, method='GET')
+            with urllib.request.urlopen(req_get, timeout=15) as resp:
+                sha = json.loads(resp.read().decode('utf-8')).get('sha')
+        except Exception:
+            pass  # file may not exist yet — that's fine
+
+        payload = {
+            'message':   'sync: auto-backup RRSS database',
+            'content':   db_b64,
+            'committer': {'name': 'RRSS App', 'email': 'rrss@kabat.com'},
+        }
+        if sha:
+            payload['sha'] = sha
+
+        data = json.dumps(payload).encode('utf-8')
+        req_put = urllib.request.Request(api_url, data=data, headers=headers, method='PUT')
+        with urllib.request.urlopen(req_put, timeout=30) as resp:
+            status = resp.status
+        return status in (200, 201)
+    except Exception:
+        return False
+
+
 def _save_df_to_db(df, marca, año, mes):
     from database import save_parrilla_posts
     save_parrilla_posts(marca, año, mes, _df_to_posts(df))
+    try:
+        _github_sync_db()
+    except Exception:
+        pass
 
 
 # ── Monday.com Integration ─────────────────────────────────────────────────────
@@ -2503,6 +2561,10 @@ def show_parrilla():
             if not _is_visita and st.button("💾  Guardar cambios", use_container_width=True, key="btn_guardar_parrilla"):
                 try:
                     _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
+                    # Sync DB to GitHub for persistence across Streamlit Cloud reboots
+                    _gh_ok = _github_sync_db()
+                    if _gh_ok:
+                        st.caption("☁️ DB sincronizada con GitHub")
                     # Sync estados to Monday if configured
                     updated, skipped, err = _monday_push_estados(
                         edited_df, meta.get('marca', ''), año, mes

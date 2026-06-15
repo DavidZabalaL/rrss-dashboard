@@ -174,6 +174,20 @@ def show_accesos():
         else:
             st.warning("Base de datos no encontrada.")
 
+        # Sincronizar DB con GitHub
+        if st.button("📤 Sincronizar DB con GitHub", use_container_width=True,
+                     key="pg_acc_gh_sync"):
+            from modules.parrilla import _github_sync_db
+            with st.spinner("Sincronizando con GitHub..."):
+                ok = _github_sync_db()
+            if ok:
+                st.success("✅ Base de datos sincronizada con GitHub.")
+            else:
+                st.error(
+                    "No se pudo sincronizar. Verifica que GITHUB_TOKEN y "
+                    "GITHUB_REPO estén configurados en los Secrets de Streamlit."
+                )
+
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("---")
         st.markdown(
