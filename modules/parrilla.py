@@ -481,10 +481,17 @@ _FONT_PATHS = [
 ]
 
 
-def _load_font(size):
-    """Return the best available PIL font at the given size."""
+def _load_font(size, brand_id=None):
+    """Return the best available PIL font at the given size.
+    Checks brand-specific fonts first (marca/<brand_id>/fonts/)."""
     from PIL import ImageFont
-    for fp in _FONT_PATHS:
+    paths = []
+    if brand_id:
+        brand_font_dir = ROOT / 'marca' / brand_id / 'fonts'
+        for candidate in ('SpaceGrotesk-Bold.ttf', 'bold.ttf', 'regular.ttf'):
+            paths.append(str(brand_font_dir / candidate))
+    paths += _FONT_PATHS
+    for fp in paths:
         try:
             return ImageFont.truetype(fp, size)
         except Exception:
@@ -495,7 +502,60 @@ def _load_font(size):
         return ImageFont.load_default()
 
 
-def _add_slide_text(img_bytes, titulo, subtitulo, numero, total):
+def _hex_to_color_name(hex_str):
+    """Convert a hex color string to a descriptive Spanish name so AI models
+    don't render the hex code as literal text in the image."""
+    try:
+        h = hex_str.strip('#')
+        if len(h) == 3:
+            h = h[0]*2 + h[1]*2 + h[2]*2
+        if len(h) != 6:
+            return hex_str
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        mx, mn = max(r, g, b), min(r, g, b)
+        brightness = mx / 255
+        saturation = (mx - mn) / mx if mx > 0 else 0
+
+        if brightness < 0.18:
+            return 'negro profundo'
+        if brightness > 0.88 and saturation < 0.12:
+            return 'blanco'
+        if saturation < 0.12:
+            if brightness < 0.35:
+                return 'gris muy oscuro'
+            if brightness < 0.6:
+                return 'gris medio'
+            return 'gris claro'
+
+        d = mx - mn
+        if mx == r:
+            h_deg = (60 * ((g - b) / d)) % 360
+        elif mx == g:
+            h_deg = 60 * ((b - r) / d) + 120
+        else:
+            h_deg = 60 * ((r - g) / d) + 240
+
+        pfx = 'oscuro ' if brightness < 0.38 else ('brillante ' if brightness > 0.72 else '')
+        if h_deg < 30 or h_deg >= 330:
+            return pfx + 'rojo'
+        if h_deg < 60:
+            return pfx + 'naranja'
+        if h_deg < 90:
+            return pfx + 'amarillo'
+        if h_deg < 150:
+            return pfx + 'verde'
+        if h_deg < 195:
+            return pfx + 'cian'
+        if h_deg < 255:
+            return pfx + 'azul'
+        if h_deg < 285:
+            return pfx + 'violeta'
+        return pfx + 'magenta'
+    except Exception:
+        return hex_str
+
+
+def _add_slide_text(img_bytes, titulo, subtitulo, numero, total, brand_id=None):
     """
     Overlay title + slide indicator on a carousel image using PIL.
     Returns PNG bytes. Always renders text so it's guaranteed to be in Spanish.
@@ -512,9 +572,9 @@ def _add_slide_text(img_bytes, titulo, subtitulo, numero, total):
     title_size = max(34, h // 16)
     sub_size   = max(22, h // 26)
     ind_size   = max(18, h // 38)
-    f_title = _load_font(title_size)
-    f_sub   = _load_font(sub_size)
-    f_ind   = _load_font(ind_size)
+    f_title = _load_font(title_size, brand_id)
+    f_sub   = _load_font(sub_size,   brand_id)
+    f_ind   = _load_font(ind_size,   brand_id)
 
     def _wrap(text, max_px, font, max_lines=2):
         words = text.split()
@@ -1109,9 +1169,9 @@ def _build_image_prompt_request(row, brand, red_formato, style='libre'):
     tone   = brand.get('tone', {}).get('style', 'profesional y moderno')
     avoid  = ', '.join(brand.get('tone', {}).get('avoid', []))
     colors = brand.get('colors', {})
-    primary   = colors.get('primary', '')
-    secondary = colors.get('secondary', '')
-    accent    = colors.get('accent', colors.get('tertiary', ''))
+    primary   = _hex_to_color_name(colors.get('primary', ''))
+    secondary = _hex_to_color_name(colors.get('secondary', ''))
+    accent    = _hex_to_color_name(colors.get('accent', colors.get('tertiary', '')))
 
     if 'LinkedIn' in red_formato:
         aspect = '1200×628 px (horizontal, landscape) — aspect ratio 16:9'
@@ -1196,8 +1256,8 @@ def _build_carousel_slides_prompt(row, brand, n_slides, style='cards'):
     label     = brand.get('label', '')
     tone      = brand.get('tone', {}).get('style', 'profesional y moderno')
     colors    = brand.get('colors', {})
-    primary   = colors.get('primary', '')
-    secondary = colors.get('secondary', '')
+    primary   = _hex_to_color_name(colors.get('primary', ''))
+    secondary = _hex_to_color_name(colors.get('secondary', ''))
 
     _style_names = {
         'cards':       'Cards corporativo — fondo blanco/gris, dispositivo hero prominente, paneles de datos flotantes, entorno real fotorrealista',
@@ -2762,6 +2822,7 @@ def show_parrilla():
                                     _sl.get('subtitulo', ''),
                                     _sl['numero'],
                                     _car_n,
+                                    brand_id=brand.get('brand_id', ''),
                                 )
                                 _car_imgs.append({
                                     'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
