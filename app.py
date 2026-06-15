@@ -400,7 +400,8 @@ with st.sidebar:
     _nav_base = [
         "🎯  Monitor de KPIs", "🏠  Dashboard", "📁  Importar Datos",
         "🔍  Analista de Contenido", "🤖  Insights para IA",
-        "📅  Parrilla de Contenido", "✍️  Post Rápido", "📖  Manual de Uso",
+        "📅  Parrilla de Contenido", "✍️  Post Rápido",
+        "📊  Reporte", "📖  Manual de Uso",
     ]
     if user.get('role') == 'admin':
         _nav_base = _nav_base + ["🔐  Accesos"]
@@ -583,6 +584,10 @@ elif nav == "📅  Parrilla de Contenido":
 elif nav == "✍️  Post Rápido":
     from modules.post_quick import show_post_quick
     show_post_quick()
+
+elif nav == "📊  Reporte":
+    from modules.reporte import show_reporte
+    show_reporte()
 
 elif nav == "📖  Manual de Uso":
     from modules.readme import show_readme
