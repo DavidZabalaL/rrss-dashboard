@@ -320,8 +320,15 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     Uses st.toggle + st.radio so that opening/selecting variants does NOT call st.rerun()
     and therefore does not reset the active Streamlit tab.
     """
-    _open_key = f"_la_open_{key_prefix}"
-    _cust_key = f"_la_cust_{key_prefix}"
+    _open_key  = f"_la_open_{key_prefix}"
+    _close_key = f"_la_pclose_{key_prefix}"  # pending-close flag
+    _cust_key  = f"_la_cust_{key_prefix}"
+
+    # Apply pending-close BEFORE instantiating the toggle. Streamlit forbids
+    # modifying a widget's state key after the widget has already been rendered
+    # in the same script run, so we defer the close to the start of the next run.
+    if st.session_state.pop(_close_key, False):
+        st.session_state[_open_key] = False
 
     # st.toggle manages its state automatically — no st.rerun() needed to open/close
     _is_open = st.toggle("🏷️ Agregar logo", key=_open_key)
@@ -412,7 +419,7 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
                 logo_variant=_final_var,
                 custom_logo_bytes=_final_cust,
             )
-            st.session_state[_open_key] = False  # close toggle on next rerun
+            st.session_state[_close_key] = True  # schedule close for the next run
             return _result
         except Exception as _le:
             st.error(f"Error al aplicar logo: {_le}")
