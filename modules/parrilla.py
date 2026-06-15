@@ -1789,6 +1789,102 @@ def _monday_format_update(p):
     )
 
 
+def _monday_fetch_parrilla(api_key, board_id, marca, año, mes):
+    """Read parrilla posts from Monday.com for the given brand/month.
+    Returns list of post dicts compatible with _posts_to_df()."""
+    board_name, columns, groups = _monday_get_board_info(api_key, board_id)
+    col_map  = _monday_match_columns(columns)
+    group_id = _monday_find_group(groups, marca)
+
+    if not group_id:
+        raise ValueError(f"No se encontró grupo para '{marca}' en el tablero de Monday.")
+
+    col_ids_str = ', '.join(f'"{info["id"]}"' for info in col_map.values())
+
+    query = f"""query {{
+      boards(ids: [{board_id}]) {{
+        groups(ids: ["{group_id}"]) {{
+          items_page(limit: 200) {{
+            items {{
+              id
+              name
+              column_values(ids: [{col_ids_str}]) {{
+                id
+                text
+                value
+              }}
+            }}
+          }}
+        }}
+      }}
+    }}"""
+
+    data  = _monday_request(api_key, query)
+    items = (data
+             .get('boards',  [{}])[0]
+             .get('groups',  [{}])[0]
+             .get('items_page', {})
+             .get('items',  []))
+
+    reverse_map = {info['id']: field for field, info in col_map.items()}
+    mes_prefix  = f"{año}-{mes:02d}"
+    DIAS_ES     = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
+
+    posts = []
+    for item in items:
+        cv_by_id = {cv['id']: cv for cv in item.get('column_values', [])}
+        vals = {}
+
+        for col_id, cv in cv_by_id.items():
+            field    = reverse_map.get(col_id)
+            if not field:
+                continue
+            col_type = col_map[field]['type']
+            raw_val  = cv.get('value') or ''
+            text_val = cv.get('text') or ''
+
+            if col_type == 'date' and raw_val:
+                try:
+                    date_obj = json.loads(raw_val)
+                    vals[field] = date_obj.get('date', text_val)
+                except Exception:
+                    vals[field] = text_val[:10] if text_val else ''
+            else:
+                vals[field] = text_val
+
+        fecha = vals.get('fecha', '')
+        if not fecha or not fecha.startswith(mes_prefix):
+            continue
+
+        item_name = item.get('name', '')
+        tema = item_name.split(' — ', 1)[1].strip() if ' — ' in item_name else item_name
+
+        try:
+            from datetime import date as _dparse
+            dia_semana = DIAS_ES[_dparse.fromisoformat(fecha).weekday()]
+        except Exception:
+            dia_semana = ''
+
+        posts.append({
+            'fecha':           fecha,
+            'dia_semana':      dia_semana,
+            'tipo_dia':        'regular',
+            'tema':            tema,
+            'pilar':           vals.get('pilar', ''),
+            'formato':         vals.get('formato', ''),
+            'copy_linkedin':   vals.get('copy_linkedin', ''),
+            'copy_facebook':   vals.get('copy_facebook', ''),
+            'arte_sugerencia': vals.get('arte_sugerencia', ''),
+            'hashtags':        vals.get('hashtags', ''),
+            'cta':             vals.get('cta', ''),
+            'estado':          vals.get('estado', 'Borrador'),
+            'monday_item_id':  item.get('id'),
+        })
+
+    posts.sort(key=lambda p: p['fecha'])
+    return posts
+
+
 def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
     """Creates Monday.com items for each post in df. Returns result dict."""
     from database import get_parrilla_posts, update_monday_item_ids
@@ -2163,8 +2259,8 @@ def show_parrilla():
                     try:
                         _save_df_to_db(df, brand.get('label', ''), año, mes)
                         st.write("✅ Guardado en base de datos.")
-                    except Exception:
-                        pass
+                    except Exception as _dbe:
+                        st.warning(f"⚠️ No se pudo guardar en DB: {_dbe}")
 
                     status.update(label=f"Parrilla lista: {len(df)} piezas", state="complete")
                     st.rerun()
@@ -2190,6 +2286,44 @@ def show_parrilla():
                     st.info(f"📂 Parrilla de **{MESES_ES[mes]} {año}** cargada desde la base de datos.")
             except Exception:
                 pass
+
+        # ── Recuperar desde Monday si la DB está vacía y Monday está configurado ──
+        if 'parrilla_df' not in st.session_state and _monday_configured():
+            st.markdown("---")
+            st.info(
+                f"📭 No hay parrilla guardada para **{brand.get('label','')}** "
+                f"· **{MESES_ES[mes]} {año}** en la base de datos local.  \n"
+                "Si ya sincronizaste esta parrilla con Monday.com, puedes recuperarla aquí."
+            )
+            if st.button("📥 Recuperar parrilla desde Monday.com",
+                         key="btn_monday_recover", type="primary",
+                         use_container_width=False):
+                with st.spinner("Importando desde Monday.com…"):
+                    try:
+                        _rec_api     = _monday_api_key()
+                        _rec_board   = _monday_board_id()
+                        _rec_marca   = brand.get('label', '')
+                        _rec_posts   = _monday_fetch_parrilla(_rec_api, _rec_board, _rec_marca, año, mes)
+                        if not _rec_posts:
+                            st.warning(
+                                f"No se encontraron ítems para {_rec_marca} en "
+                                f"{MESES_ES[mes]} {año}. Verifica que el grupo en Monday "
+                                "tenga el nombre de la marca y que haya ítems para ese mes."
+                            )
+                        else:
+                            _rec_df = _posts_to_df(_rec_posts)
+                            _save_df_to_db(_rec_df, _rec_marca, año, mes)
+                            st.session_state['parrilla_df']        = _rec_df
+                            st.session_state['parrilla_historial'] = []
+                            st.session_state['parrilla_meta'] = {
+                                'marca': _rec_marca, 'año': año, 'mes': mes,
+                                'objetivo': '(recuperada desde Monday.com)',
+                                'con_insights': False, 'insights_mes': '', 'brand': brand,
+                            }
+                            st.success(f"✅ {len(_rec_posts)} publicaciones recuperadas desde Monday.com.")
+                            st.rerun()
+                    except Exception as _re:
+                        st.error(f"Error al recuperar: {_re}")
 
     if 'parrilla_df' not in st.session_state:
         return
