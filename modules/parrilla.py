@@ -2052,7 +2052,9 @@ def show_parrilla():
             st.error(f"Error al cargar parrilla: {_ev}")
             return
 
-    # ── Carga desde DB y recuperación desde Monday (temprana, antes del generador) ─
+    # ── Carga desde DB; si está vacía y Monday está configurado, auto-recupera ──
+    # Streamlit Community Cloud tiene filesystem efímero — cada reboot borra la DB.
+    # Monday.com es el almacenamiento persistente real; la DB es sólo caché de sesión.
     if not _is_visita and 'parrilla_df' not in st.session_state:
         _early_marca = brand.get('label', '')
         try:
@@ -2066,9 +2068,35 @@ def show_parrilla():
                     'objetivo': '(guardada en base de datos)',
                     'con_insights': False, 'insights_mes': '', 'brand': brand,
                 }
-                st.info(f"📂 Parrilla de **{MESES_ES[mes]} {año}** cargada desde la base de datos.")
         except Exception:
             pass
+
+    # Auto-recover from Monday silently when DB cache is empty
+    if not _is_visita and 'parrilla_df' not in st.session_state and _monday_configured():
+        _auto_marca = brand.get('label', '')
+        _auto_key   = f"_monday_autoload_{marca_key}_{año}_{mes}"
+        if not st.session_state.get(_auto_key):
+            with st.spinner(f"Sincronizando parrilla de {MESES_ES[mes]} {año} desde Monday.com…"):
+                try:
+                    _auto_posts = _monday_fetch_parrilla(
+                        _monday_api_key(), _monday_board_id(), _auto_marca, año, mes,
+                    )
+                    if _auto_posts:
+                        _auto_df = _posts_to_df(_auto_posts)
+                        _save_df_to_db(_auto_df, _auto_marca, año, mes)
+                        st.session_state['parrilla_df']        = _auto_df
+                        st.session_state['parrilla_historial'] = []
+                        st.session_state['parrilla_meta'] = {
+                            'marca': _auto_marca, 'año': año, 'mes': mes,
+                            'objetivo': '(sincronizada desde Monday.com)',
+                            'con_insights': False, 'insights_mes': '', 'brand': brand,
+                        }
+                        st.session_state[_auto_key] = True
+                        st.rerun()
+                    else:
+                        st.session_state[_auto_key] = True  # mark as tried so we don't loop
+                except Exception:
+                    st.session_state[_auto_key] = True
 
     if not _is_visita and 'parrilla_df' not in st.session_state:
         st.markdown("---")
@@ -2085,6 +2113,8 @@ def show_parrilla():
                 if not _monday_configured():
                     st.error("Monday.com no está configurado. Agrega MONDAY_API_KEY y MONDAY_BOARD_ID en los secrets.")
                 else:
+                    # Clear the auto-load flag so it retries
+                    st.session_state.pop(f"_monday_autoload_{marca_key}_{año}_{mes}", None)
                     with st.spinner("Importando desde Monday.com…"):
                         try:
                             _rp = _monday_fetch_parrilla(
