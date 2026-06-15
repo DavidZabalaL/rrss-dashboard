@@ -316,22 +316,21 @@ def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20,
 def _logo_adder_ui(key_prefix, img_bytes, brand):
     """
     Inline logo overlay widget. Returns composited PNG bytes when Apply is clicked, else None.
-    key_prefix must be unique per widget instance.
-    Uses st.toggle + st.radio so that opening/selecting variants does NOT call st.rerun()
-    and therefore does not reset the active Streamlit tab.
+    _open_key is intentionally NOT used as a widget key= parameter so it can be
+    set freely at any time without triggering Streamlit's
+    'cannot be modified after widget is instantiated' error.
     """
-    _open_key  = f"_la_open_{key_prefix}"
-    _close_key = f"_la_pclose_{key_prefix}"  # pending-close flag
-    _cust_key  = f"_la_cust_{key_prefix}"
+    _open_key = f"_la_open_{key_prefix}"
+    _cust_key = f"_la_cust_{key_prefix}"
 
-    # Apply pending-close BEFORE instantiating the toggle. Streamlit forbids
-    # modifying a widget's state key after the widget has already been rendered
-    # in the same script run, so we defer the close to the start of the next run.
-    if st.session_state.pop(_close_key, False):
-        st.session_state[_open_key] = False
+    _is_open = st.session_state.get(_open_key, False)
 
-    # st.toggle manages its state automatically — no st.rerun() needed to open/close
-    _is_open = st.toggle("🏷️ Agregar logo", key=_open_key)
+    # Plain button for open/close — _open_key stays a plain session-state variable,
+    # never owned by a widget, so we can set it freely including inside Apply.
+    _btn_lbl = "✕ Cerrar logo" if _is_open else "🏷️ Agregar logo"
+    if st.button(_btn_lbl, key=f"_la_btn_{key_prefix}"):
+        _is_open = not _is_open
+        st.session_state[_open_key] = _is_open
 
     if not _is_open:
         return None
@@ -349,7 +348,6 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             _thumb_cols[_vi].image(str(_logo_dir / f'{_vv}.png'), use_container_width=True)
 
         if not _has_custom:
-            # st.radio stores selection in session state automatically — no st.rerun() needed
             st.radio(
                 "Variante",
                 _avail_vars,
@@ -380,7 +378,6 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
         with _hc2:
             if st.button("🗑️", key=f"_la_rmcust_{key_prefix}", help="Quitar logo propio"):
                 st.session_state.pop(_cust_key, None)
-                # Natural rerun from button click updates UI — no st.rerun()
 
     # Position
     _pos_opts = {
@@ -403,11 +400,10 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
         key=f"_la_pct_sl_{key_prefix}",
     )
 
-    # Apply — only here do we need the caller to st.rerun() (once, intentionally)
     if st.button("✅ Aplicar logo", key=f"_la_apply_{key_prefix}", type="primary", use_container_width=True):
         _final_var  = st.session_state.get(f"_la_var_{key_prefix}", _avail_vars[0] if _avail_vars else 'white')
         if _has_custom:
-            _final_var = 'white'  # variant ignored when custom bytes provided
+            _final_var = 'white'
         _final_pos  = _pos_opts.get(_sel_pos, 'bottom-right')
         _final_pct  = _pct_val / 100
         _final_cust = st.session_state.get(_cust_key) if _has_custom else None
@@ -419,7 +415,7 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
                 logo_variant=_final_var,
                 custom_logo_bytes=_final_cust,
             )
-            st.session_state[_close_key] = True  # schedule close for the next run
+            st.session_state[_open_key] = False  # safe: not a widget-owned key
             return _result
         except Exception as _le:
             st.error(f"Error al aplicar logo: {_le}")
