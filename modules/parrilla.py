@@ -1855,7 +1855,7 @@ def _posts_from_db(db_posts):
         'hashtags':        p.get('hashtags')        or '',
         'cta':             p.get('cta')             or '',
         'estado':          p.get('estado')          or 'Borrador',
-        'num_slides':      int(p.get('num_slides') or 1),
+        'num_slides':      int(p.get('num_slides') or (4 if 'carrusel' in (p.get('formato') or '').lower() else 1)),
     } for p in db_posts]
     return _posts_to_df(posts)
 
@@ -2803,6 +2803,51 @@ def show_parrilla():
                         st.write("✅ Guardado en base de datos.")
                     except Exception as _dbe:
                         st.warning(f"⚠️ No se pudo guardar en DB: {_dbe}")
+
+                    # Auto-generar texto de slides para carruseles
+                    _DEFAULT_SLIDES = 4
+                    _carousel_idx = [
+                        i for i, row in df.iterrows()
+                        if 'carrusel' in str(row.get('Formato', '')).lower()
+                    ]
+                    if _carousel_idx:
+                        st.write(
+                            f"🎠 Generando texto de slides para "
+                            f"{len(_carousel_idx)} carrusel(es) ({_DEFAULT_SLIDES} slides c/u)…"
+                        )
+                        _brand_lbl_g = brand.get('label', '')
+                        _gen_errors  = 0
+                        for _ci in _carousel_idx:
+                            _cr = df.loc[_ci]
+                            _copy_r = (
+                                str(_cr.get('Copy LinkedIn', '') or '')
+                                or str(_cr.get('Copy Facebook / Instagram', '') or '')
+                            )
+                            try:
+                                _txt_s = _generate_texto_imagen_ai(
+                                    tema        = str(_cr.get('Tema', '') or ''),
+                                    formato     = str(_cr.get('Formato', '') or ''),
+                                    pilar       = str(_cr.get('Pilar', '') or ''),
+                                    copy_ref    = _copy_r,
+                                    brand_label = _brand_lbl_g,
+                                    num_slides  = _DEFAULT_SLIDES,
+                                )
+                                df.at[_ci, 'Texto en Imagen'] = _txt_s
+                                df.at[_ci, 'Slides'] = _DEFAULT_SLIDES
+                            except Exception:
+                                _gen_errors += 1
+                        st.session_state['parrilla_df'] = df
+                        try:
+                            _save_df_to_db(df, brand.get('label', ''), año, mes)
+                        except Exception:
+                            pass
+                        if _gen_errors:
+                            st.write(
+                                f"⚠️ {len(_carousel_idx) - _gen_errors} slides OK · "
+                                f"{_gen_errors} con error (puedes regenerarlos desde la card)."
+                            )
+                        else:
+                            st.write(f"✅ Texto de slides generado para {len(_carousel_idx)} carrusel(es).")
 
                     status.update(label=f"Parrilla lista: {len(df)} piezas", state="complete")
                     st.rerun()
