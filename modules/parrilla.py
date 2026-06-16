@@ -656,10 +656,18 @@ def _generate_texto_imagen_ai(tema, formato, pilar, copy_ref, brand_label):
         'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 400},
     }).encode()
     req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
-    resp = urllib.request.urlopen(req, timeout=30)
-    data = json.loads(resp.read())
+    try:
+        resp = urllib.request.urlopen(req, timeout=60)
+        data = json.loads(resp.read())
+    except Exception as _e:
+        raise RuntimeError(f"Error Gemini API: {_e}")
     parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
-    return parts[0].get('text', '').strip() if parts else ''
+    text  = parts[0].get('text', '').strip() if parts else ''
+    if not text:
+        # surface any error detail from the API response
+        err = data.get('error', {}).get('message', 'respuesta vacía')
+        raise RuntimeError(f"Gemini no devolvió texto: {err}")
+    return text
 
 
 def _edit_imagen_gemini(image_bytes, instruction):
@@ -2922,12 +2930,19 @@ def show_parrilla():
                     type="primary",
                     use_container_width=False,
                 ):
-                    _progreso = st.progress(0, text="Generando textos de imagen…")
-                    _errores  = 0
+                    _progreso  = st.progress(0, text="Iniciando…")
+                    _log_area  = st.empty()
+                    _errores   = []
+                    _generados = 0
                     for _idx_n, _row_i in enumerate(_vacíos):
                         _row      = edited_df.loc[_row_i]
+                        _fecha_p  = str(_row.get('Fecha', f'post {_idx_n+1}'))
                         _copy_ref = (str(_row.get('Copy LinkedIn', '') or '')
                                      or str(_row.get('Copy Facebook / Instagram', '') or ''))
+                        _progreso.progress(
+                            (_idx_n) / len(_vacíos),
+                            text=f"Generando {_idx_n+1}/{len(_vacíos)}: {_fecha_p}…",
+                        )
                         try:
                             _txt = _generate_texto_imagen_ai(
                                 tema        = str(_row.get('Tema',    '') or ''),
@@ -2936,21 +2951,26 @@ def show_parrilla():
                                 copy_ref    = _copy_ref,
                                 brand_label = _brand_lbl,
                             )
-                            edited_df.at[_row_i, 'Texto en Imagen'] = _txt
-                        except Exception:
-                            _errores += 1
-                        _progreso.progress(
-                            (_idx_n + 1) / len(_vacíos),
-                            text=f"Post {_idx_n + 1}/{len(_vacíos)}…",
-                        )
+                            if _txt:
+                                edited_df.at[_row_i, 'Texto en Imagen'] = _txt
+                                _generados += 1
+                            else:
+                                _errores.append(f"{_fecha_p}: respuesta vacía de la IA")
+                        except Exception as _exc:
+                            _errores.append(f"{_fecha_p}: {_exc}")
+                    _progreso.progress(1.0, text="Guardando en base de datos…")
                     st.session_state['parrilla_df'] = edited_df
                     _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
                     _github_sync_db()
                     _progreso.empty()
+                    _log_area.empty()
                     if _errores:
-                        st.warning(f"Generados con {_errores} error(es). Revisa las cards.")
+                        st.error(
+                            f"Se generaron {_generados} texto(s) pero hubo {len(_errores)} error(es):\n"
+                            + "\n".join(f"• {e}" for e in _errores)
+                        )
                     else:
-                        st.success(f"✅ {len(_vacíos)} texto(s) en imagen generados y guardados.")
+                        st.success(f"✅ {_generados} texto(s) en imagen generados y guardados.")
                     st.rerun()
 
         # ── Cards de contenido (una por post, colapsadas por defecto) ──────────
