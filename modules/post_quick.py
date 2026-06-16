@@ -514,6 +514,10 @@ def show_post_quick():
                 marca_db = 'Kabat One' if marca_key == 'k1' else 'SYM'
                 save_parrilla_posts(marca_db, fecha_post.year, fecha_post.month, [post_row])
 
+                # Invalidar caché de parrilla para que recargue desde DB al cambiar de tab
+                for _k in ('parrilla_df', 'parrilla_meta', 'parrilla_historial'):
+                    st.session_state.pop(_k, None)
+
                 if _sync.github_configured():
                     with st.spinner("Sincronizando con GitHub…"):
                         _sync.push()
