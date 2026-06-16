@@ -2646,55 +2646,72 @@ def show_parrilla():
                 if _cn.button("Cancelar", key="btn_del_cancel"):
                     st.rerun()
 
-        # ── Editor de contenido completo (sin scroll horizontal) ─────────────
-        if not _is_visita and len(df) > 0:
-            st.markdown("")
-            with st.expander("✏️  Ver / editar contenido completo de un post"):
-                _pnum = st.number_input(
-                    "Número de post en la lista (1 = el primero)",
-                    min_value=1, max_value=len(df), value=1, step=1,
-                    key="par_detail_sel",
+        # ── Cards de contenido (una por post, colapsadas por defecto) ──────────
+        if len(df) > 0:
+            st.markdown("---")
+            st.markdown("**✏️ Contenido de los posts**")
+            for _pi, _prow in df.iterrows():
+                _fecha  = str(_prow.get('Fecha',  ''))
+                _dia    = str(_prow.get('Día',    ''))
+                _tema   = str(_prow.get('Tema',   '') or '')
+                _estado = str(_prow.get('Estado', 'Borrador'))
+                _ecolor = _ESTADO_COLORS.get(_estado, {}).get('solid', '#888')
+                _badge  = (
+                    f'<span style="background:{_ecolor};color:#fff;'
+                    f'padding:2px 8px;border-radius:10px;font-size:11px">'
+                    f'{_estado}</span>'
                 )
-                _pi   = _pnum - 1
-                _prow = df.iloc[_pi]
-
-                st.caption(
-                    f"Post #{_pnum} — **{_prow.get('Fecha','')}** · {_prow.get('Día','')}"
+                _exp_lbl = (
+                    f"📝  {_fecha}  ·  {_dia}  ·  "
+                    f"{(_tema[:55] + '…') if len(_tema) > 55 else (_tema or '(sin tema)')}"
+                    f"  —  {_estado}"
                 )
-                _dc1, _dc2 = st.columns(2)
-                _d_tema = _dc1.text_input("Tema",
-                                          value=str(_prow.get('Tema',    '')),
-                                          key=f"d_tema_{_pi}")
-                _d_cta  = _dc2.text_input("CTA",
-                                          value=str(_prow.get('CTA',     '')),
-                                          key=f"d_cta_{_pi}")
-                _d_li   = st.text_area("Copy LinkedIn",
-                                       value=str(_prow.get('Copy LinkedIn', '')),
-                                       height=220, key=f"d_li_{_pi}")
-                _d_fb   = st.text_area("Copy Facebook / Instagram",
-                                       value=str(_prow.get('Copy Facebook / Instagram', '')),
-                                       height=220, key=f"d_fb_{_pi}")
-                _d_ht   = st.text_input("Hashtags",
-                                        value=str(_prow.get('Hashtags', '')),
-                                        key=f"d_ht_{_pi}")
-                _d_arte = st.text_area("Arte Sugerida",
-                                       value=str(_prow.get('Arte Sugerida', '')),
-                                       height=100, key=f"d_arte_{_pi}")
 
-                if st.button("💾  Actualizar este post", type="primary",
-                             key=f"d_save_{_pi}", use_container_width=True):
-                    df.at[_pi, 'Tema']                      = _d_tema
-                    df.at[_pi, 'CTA']                       = _d_cta
-                    df.at[_pi, 'Copy LinkedIn']             = _d_li
-                    df.at[_pi, 'Copy Facebook / Instagram'] = _d_fb
-                    df.at[_pi, 'Hashtags']                  = _d_ht
-                    df.at[_pi, 'Arte Sugerida']             = _d_arte
-                    edited_df = df
-                    st.session_state['parrilla_df'] = df
-                    st.success(
-                        "Post actualizado en memoria. Presiona **💾 Guardar cambios** "
-                        "para persistir en la base de datos."
+                with st.expander(_exp_lbl, expanded=False):
+                    _cc1, _cc2 = st.columns(2)
+                    _cv_tema = _cc1.text_input(
+                        "Tema", value=_tema,
+                        key=f"c_tema_{_pi}", disabled=_is_visita,
                     )
+                    _cv_cta  = _cc2.text_input(
+                        "CTA", value=str(_prow.get('CTA', '') or ''),
+                        key=f"c_cta_{_pi}", disabled=_is_visita,
+                    )
+                    _cv_li = st.text_area(
+                        "Copy LinkedIn",
+                        value=str(_prow.get('Copy LinkedIn', '') or ''),
+                        height=200, key=f"c_li_{_pi}", disabled=_is_visita,
+                    )
+                    _cv_fb = st.text_area(
+                        "Copy Facebook / Instagram",
+                        value=str(_prow.get('Copy Facebook / Instagram', '') or ''),
+                        height=200, key=f"c_fb_{_pi}", disabled=_is_visita,
+                    )
+                    _cv_ht = st.text_input(
+                        "Hashtags", value=str(_prow.get('Hashtags', '') or ''),
+                        key=f"c_ht_{_pi}", disabled=_is_visita,
+                    )
+                    _cv_arte = st.text_area(
+                        "Arte Sugerida",
+                        value=str(_prow.get('Arte Sugerida', '') or ''),
+                        height=90, key=f"c_arte_{_pi}", disabled=_is_visita,
+                    )
+
+                    if not _is_visita:
+                        if st.button("💾  Actualizar este post", type="primary",
+                                     key=f"c_save_{_pi}", use_container_width=True):
+                            df.at[_pi, 'Tema']                      = _cv_tema
+                            df.at[_pi, 'CTA']                       = _cv_cta
+                            df.at[_pi, 'Copy LinkedIn']             = _cv_li
+                            df.at[_pi, 'Copy Facebook / Instagram'] = _cv_fb
+                            df.at[_pi, 'Hashtags']                  = _cv_ht
+                            df.at[_pi, 'Arte Sugerida']             = _cv_arte
+                            edited_df = df
+                            st.session_state['parrilla_df'] = df
+                            st.success(
+                                "Actualizado en memoria. Presiona "
+                                "**💾 Guardar cambios** para persistir."
+                            )
 
         # Botones de guardar y descargar
         col_save, col_dl, col_info = st.columns([1.5, 1.5, 3])
