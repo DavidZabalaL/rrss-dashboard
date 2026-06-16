@@ -1534,7 +1534,8 @@ def _build_image_prompt_request(row, brand, red_formato, style='libre'):
     pilar         = str(row.get('Pilar', ''))
     arte          = str(row.get('Arte Sugerida', ''))
     copy          = str(row.get('Copy LinkedIn', ''))[:300]
-    texto_imagen  = str(row.get('Texto en Imagen', '') or '')
+    _ti = row.get('Texto en Imagen')
+    texto_imagen = '' if (_ti is None or str(_ti).strip().lower() in ('nan', 'none', '')) else str(_ti).strip()
     fmt    = str(row.get('Formato', ''))
     fecha  = str(row.get('Fecha', ''))
     tipo   = str(row.get('Tipo', 'regular'))
@@ -4040,6 +4041,10 @@ def show_parrilla():
                 sel_lbl = st.selectbox("Publicación", opciones, key="img_prompt_sel")
                 sel_idx = opciones.index(sel_lbl)
                 sel_row = df.iloc[sel_idx].to_dict()
+                # Si el usuario editó el texto en la tarjeta sin guardar, usa el valor vivo del widget
+                _live_ti = st.session_state.get(f"c_img_{sel_idx}", '')
+                if _live_ti and str(_live_ti).strip().lower() not in ('nan', 'none', ''):
+                    sel_row['Texto en Imagen'] = str(_live_ti).strip()
 
                 col_red, _ = st.columns([2, 3])
                 with col_red:
@@ -4079,6 +4084,14 @@ def show_parrilla():
                 st.caption(_style_desc.get(_style_value, ''))
 
                 _img_error_ph = st.empty()
+
+                # Indicador del texto que se usará como overlay
+                _ti_preview = sel_row.get('Texto en Imagen', '')
+                _ti_clean = '' if (not _ti_preview or str(_ti_preview).strip().lower() in ('nan', 'none', '')) else str(_ti_preview).strip()
+                if _ti_clean:
+                    st.caption(f"✏️ Texto en imagen detectado: *{_ti_clean[:120]}{'…' if len(_ti_clean)>120 else ''}*")
+                else:
+                    st.caption("ℹ️ Sin texto en imagen — completa el campo en la parrilla para mayor precisión compositiva.")
 
                 if st.button("✨  Generar Prompts de Imagen", type="primary",
                              use_container_width=True, key="btn_gen_img_prompt"):
