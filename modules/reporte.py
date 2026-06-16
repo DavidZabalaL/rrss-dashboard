@@ -42,19 +42,19 @@ _LOGO_PATHS = {
     "sym": ROOT / "assets" / "logo_sym.png",
 }
 
-# Display name for networks
+# Display name for networks (Facebook e Instagram son secciones independientes)
 _RED_DISPLAY = {
-    "LinkedIn": "LinkedIn",
-    "Facebook": "Facebook / Instagram",
-    "Instagram": "Facebook / Instagram",
+    "LinkedIn":  "LinkedIn",
+    "Facebook":  "Facebook",
+    "Instagram": "Instagram",
 }
 
 # Metrics to show per network on the KPI cards (label, possible metric keys)
 _KPI_METRICS = [
-    ("Seguidores",    ["incremento_seguidores", "seguidores", "followers", "page_fans", "connections"]),
-    ("Publicaciones", ["publicaciones", "posts", "total_posts", "visitas"]),
-    ("Engagement",    ["interaccion", "tasa_interaccion", "engagement_rate", "engagement", "reacciones"]),
-    ("Alcance",       ["alcance", "visualizaciones", "impresiones", "reach", "impressions"]),
+    ("Seguidores",      ["incremento_seguidores", "seguidores", "followers", "page_fans", "connections"]),
+    ("Visitas",         ["visitas", "visits", "publicaciones", "posts", "total_posts"]),
+    ("Interacción",     ["interaccion", "reacciones", "tasa_interaccion", "engagement_rate", "engagement"]),
+    ("Alcance",         ["alcance", "visualizaciones", "impresiones", "reach", "impressions"]),
 ]
 
 
@@ -109,30 +109,23 @@ def _get_report_data(marca: str, marca_key: str, año: int, mes: int) -> dict:
     """Gather all data needed for the report. Returns a structured dict."""
     redes_raw = get_redes_con_datos(marca)
 
-    # Merge Facebook + Instagram into one "Facebook / Instagram" group
-    merged: dict = {}
+    # Cada red es una sección independiente (Facebook e Instagram separados)
+    networks: dict = {}
     for red in redes_raw:
-        display = _RED_DISPLAY.get(red, red)
-        metricas   = get_metricas_mensuales(marca, red, año, mes)
-        historico  = get_metricas_historico_mensual(marca, red)
-        objetivos  = get_kpi_objetivos(marca, red, año, mes)
-        if display not in merged:
-            merged[display] = {"metricas": {}, "historico": historico, "objetivos": objetivos, "redes_raw": []}
-        # Merge metrics (sum numeric values)
-        for k, v in metricas.items():
-            merged[display]["metricas"][k] = merged[display]["metricas"].get(k, 0) + (v or 0)
-        merged[display]["redes_raw"].append(red)
-        # Keep the richer historico (more rows)
-        if historico is not None and not historico.empty:
-            prev = merged[display]["historico"]
-            if prev is None or prev.empty or len(historico) > len(prev):
-                merged[display]["historico"] = historico
+        metricas  = get_metricas_mensuales(marca, red, año, mes)
+        historico = get_metricas_historico_mensual(marca, red)
+        objetivos = get_kpi_objetivos(marca, red, año, mes)
+        networks[red] = {
+            "metricas":  metricas,
+            "historico": historico,
+            "objetivos": objetivos,
+        }
 
     parrilla = get_parrilla_posts(marca, año, mes)
 
     return {
-        "redes": list(merged.keys()),
-        "networks": merged,
+        "redes":    list(networks.keys()),
+        "networks": networks,
         "parrilla": parrilla,
     }
 
@@ -382,32 +375,69 @@ body {{
     border: 1px solid #e0e8f2;
     border-top: 3px solid {primary};
     border-radius: 12px;
-    padding: 18px 16px 16px;
+    padding: 16px 14px 14px;
     box-shadow: 0 2px 8px rgba(0,0,0,.06);
-    text-align: center;
-}}
-.kpi-value {{
-    font-size: 2.5rem;
-    font-weight: 800;
-    color: {primary};
-    line-height: 1;
-    letter-spacing: -.03em;
-    margin-bottom: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }}
 .kpi-label {{
-    font-size: .65rem;
+    font-size: .62rem;
     font-weight: 700;
     color: #8a9bb0;
     text-transform: uppercase;
     letter-spacing: .12em;
+    margin-bottom: 4px;
 }}
-.kpi-network {{
-    font-size: .72rem;
+.kpi-value {{
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: {primary};
+    line-height: 1;
+    letter-spacing: -.03em;
+    margin-bottom: 2px;
+}}
+.kpi-divider {{
+    height: 1px;
+    background: #e8edf4;
+    margin: 8px 0 6px;
+}}
+.kpi-meta {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: auto;
+}}
+.kpi-obj-wrap {{
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}}
+.kpi-obj-label {{
+    font-size: .58rem;
+    color: #9aacbe;
+    text-transform: uppercase;
+    letter-spacing: .08em;
     font-weight: 600;
-    color: {secondary};
-    margin-top: 4px;
-    opacity: .75;
 }}
+.kpi-obj-val {{
+    font-size: .82rem;
+    font-weight: 700;
+    color: #4a5e75;
+}}
+.kpi-cum-badge {{
+    font-size: .75rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}}
+.kpi-cum-success {{ background: #d4f0e0; color: #1a6e35; }}
+.kpi-cum-warning {{ background: #fff3cd; color: #856404; }}
+.kpi-cum-danger  {{ background: #fdecea; color: #c0392b; }}
+.kpi-cum-none    {{ background: #f0f0f0; color: #888; font-style: italic; font-size:.68rem; }}
 
 /* ── Network section ── */
 .network-block {{
@@ -561,36 +591,63 @@ body {{
 """
 
     # ── Executive summary ────────────────────────────────────────────────────
+    def _fmt_num(v):
+        """Format a numeric metric value for display."""
+        if v is None:
+            return "—"
+        if v >= 1_000_000:
+            return f"{v/1_000_000:.1f}M"
+        if v >= 1_000:
+            return f"{v:,.0f}"
+        return f"{int(v):,}" if v == int(v) else f"{v:.1f}"
+
     kpi_blocks_html = ""
     for red in data["redes"]:
-        net_data = data["networks"].get(red, {})
-        metricas = net_data.get("metricas", {})
+        net_data     = data["networks"].get(red, {})
+        metricas     = net_data.get("metricas",  {})
+        objetivos    = net_data.get("objetivos", {})
         display_name = _RED_DISPLAY.get(red, red)
 
         kpi_cards_html = ""
         for kpi_label, candidates in _KPI_METRICS:
-            val = _find_metric(metricas, candidates)
-            if val is not None:
-                # Format value
-                if "rate" in " ".join(candidates).lower() or "tasa" in " ".join(candidates).lower():
-                    if val < 2:
-                        formatted = f"{val:.2f}%"
-                    else:
-                        formatted = f"{val:.1f}%"
-                elif val >= 1_000_000:
-                    formatted = f"{val/1_000_000:.1f}M"
-                elif val >= 1_000:
-                    formatted = f"{val:,.0f}"
-                else:
-                    formatted = f"{int(val):,}" if val == int(val) else f"{val:.1f}"
+            val     = _find_metric(metricas,  candidates)
+            obj_val = _find_metric(objetivos, candidates)
+
+            formatted     = _fmt_num(val)
+            obj_formatted = _fmt_num(obj_val)
+
+            # % cumplimiento
+            if val is not None and obj_val and obj_val > 0:
+                pct       = (val / obj_val) * 100
+                cum_label = f"{pct:.0f}%"
+                cum_class = (
+                    "kpi-cum-success" if pct >= 100
+                    else "kpi-cum-warning" if pct >= 70
+                    else "kpi-cum-danger"
+                )
+            elif val is not None:
+                cum_label = "S/Obj"
+                cum_class = "kpi-cum-none"
             else:
-                formatted = "—"
+                cum_label = ""
+                cum_class = ""
+
+            meta_html = ""
+            if cum_label:
+                meta_html = f"""
+    <div class="kpi-divider"></div>
+    <div class="kpi-meta">
+        <div class="kpi-obj-wrap">
+            <span class="kpi-obj-label">Objetivo</span>
+            <span class="kpi-obj-val">{obj_formatted}</span>
+        </div>
+        <span class="kpi-cum-badge {cum_class}">{cum_label}</span>
+    </div>"""
 
             kpi_cards_html += f"""
 <div class="kpi-card">
-    <div class="kpi-value">{formatted}</div>
     <div class="kpi-label">{kpi_label}</div>
-    <div class="kpi-network">{display_name}</div>
+    <div class="kpi-value">{formatted}</div>{meta_html}
 </div>"""
 
         kpi_blocks_html += f"""
