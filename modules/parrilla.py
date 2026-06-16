@@ -643,7 +643,7 @@ def _pleca_ui(key_prefix, img_bytes, brand):
     return None
 
 
-def _generate_texto_imagen_ai(tema, formato, pilar, copy_ref, brand_label):
+def _generate_texto_imagen_ai(tema, formato, pilar, copy_ref, brand_label, num_slides=1):
     """Genera el texto que debe ir DENTRO del arte/imagen usando Gemini.
     Retorna un string con el texto sugerido."""
     import urllib.request
@@ -653,11 +653,14 @@ def _generate_texto_imagen_ai(tema, formato, pilar, copy_ref, brand_label):
 
     fmt_lower = (formato or '').lower()
     if 'carrusel' in fmt_lower or 'carousel' in fmt_lower:
+        _n = max(1, min(int(num_slides or 1), 15))
         instruccion_formato = (
-            "Genera el texto para un CARRUSEL de máximo 5 slides. "
-            "Para cada slide escribe: 'Slide N: [título corto] / [frase o dato breve]'. "
-            "El primer slide es el portada (gancho). Los siguientes desarrollan el tema. "
-            "Máximo 8 palabras por línea."
+            f"Genera el texto para un CARRUSEL de exactamente {_n} slides. "
+            f"Para cada slide escribe DOS líneas separadas:\n"
+            f"  'Slide N: [título o texto breve - máx 10 palabras]'\n"
+            f"  'Arte N: [descripción visual del arte de ese slide - máx 15 palabras]'\n"
+            f"El slide 1 es la portada (gancho). Los slides 2 a {_n} desarrollan el tema. "
+            "Separa cada slide con una línea en blanco."
         )
     elif 'infograf' in fmt_lower:
         instruccion_formato = (
@@ -691,7 +694,7 @@ def _generate_texto_imagen_ai(tema, formato, pilar, copy_ref, brand_label):
 
     body = json.dumps({
         'contents': [{'parts': [{'text': prompt}]}],
-        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 400},
+        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 800},
     }).encode()
     req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
     try:
@@ -1760,6 +1763,7 @@ _COL_MAP = {
     'hashtags':        'Hashtags',
     'cta':             'CTA',
     'estado':          'Estado',
+    'num_slides':      'Slides',
 }
 
 
@@ -1768,7 +1772,12 @@ def _posts_to_df(posts):
     df  = raw.rename(columns={k: v for k, v in _COL_MAP.items() if k in raw.columns})
     for col in _COL_MAP.values():
         if col not in df.columns:
-            df[col] = _to_display('Borrador') if col == 'Estado' else ''
+            if col == 'Estado':
+                df[col] = _to_display('Borrador')
+            elif col == 'Slides':
+                df[col] = 1
+            else:
+                df[col] = ''
     if 'Estado' in df.columns:
         df['Estado'] = df['Estado'].fillna('Borrador').apply(
             lambda x: _to_display(_from_display(x) if x in _DISPLAY_TO_ESTADO
@@ -1801,6 +1810,7 @@ def _posts_from_db(db_posts):
         'hashtags':        p.get('hashtags')        or '',
         'cta':             p.get('cta')             or '',
         'estado':          p.get('estado')          or 'Borrador',
+        'num_slides':      int(p.get('num_slides') or 1),
     } for p in db_posts]
     return _posts_to_df(posts)
 
@@ -2988,6 +2998,7 @@ def show_parrilla():
                                 pilar       = str(_row.get('Pilar',   '') or ''),
                                 copy_ref    = _copy_ref,
                                 brand_label = _brand_lbl,
+                                num_slides  = int(_row.get('Slides', 1) or 1),
                             )
                             if _txt:
                                 edited_df.at[_row_i, 'Texto en Imagen'] = _txt
@@ -3016,10 +3027,11 @@ def show_parrilla():
             st.markdown("---")
             st.markdown("**✏️ Contenido de los posts**")
             for _pi, _prow in df.iterrows():
-                _fecha  = str(_prow.get('Fecha',  ''))
-                _dia    = str(_prow.get('Día',    ''))
-                _tema   = str(_prow.get('Tema',   '') or '')
-                _estado = str(_prow.get('Estado', 'Borrador'))
+                _fecha    = str(_prow.get('Fecha',   ''))
+                _dia      = str(_prow.get('Día',     ''))
+                _tema     = str(_prow.get('Tema',    '') or '')
+                _estado   = str(_prow.get('Estado',  'Borrador'))
+                _fmt_val  = str(_prow.get('Formato', '') or '').lower()
                 _ecolor = _ESTADO_COLORS.get(_estado, {}).get('solid', '#888')
                 _badge  = (
                     f'<span style="background:{_ecolor};color:#fff;'
@@ -3070,6 +3082,53 @@ def show_parrilla():
                         height=90, key=f"c_arte_{_pi}", disabled=_is_visita,
                     )
 
+                    # ── Sección de Carrusel: número de slides + generador ──────
+                    _is_carrusel = 'carrusel' in _fmt_val or 'carousel' in _fmt_val
+                    if _is_carrusel:
+                        st.markdown("---")
+                        st.markdown("**🎠 Configuración de Carrusel**")
+                        _saved_slides = int(_prow.get('Slides', 1) or 1)
+                        _cv_slides = st.number_input(
+                            "Número de slides",
+                            min_value=1, max_value=15,
+                            value=_saved_slides,
+                            step=1,
+                            key=f"c_slides_{_pi}",
+                            disabled=_is_visita,
+                            help="Cuántos slides tendrá el carrusel (portada incluida).",
+                        )
+                        if not _is_visita:
+                            if st.button(
+                                f"✨  Generar texto para {int(_cv_slides)} slide(s)",
+                                key=f"c_gen_slides_{_pi}",
+                                use_container_width=True,
+                            ):
+                                try:
+                                    _copy_r = (
+                                        str(_prow.get('Copy LinkedIn', '') or '')
+                                        or str(_prow.get('Copy Facebook / Instagram', '') or '')
+                                    )
+                                    _brand_lbl_c = brand.get('label', meta.get('marca', ''))
+                                    _txt_slides = _generate_texto_imagen_ai(
+                                        tema        = _tema,
+                                        formato     = str(_prow.get('Formato', '') or ''),
+                                        pilar       = str(_prow.get('Pilar', '') or ''),
+                                        copy_ref    = _copy_r,
+                                        brand_label = _brand_lbl_c,
+                                        num_slides  = int(_cv_slides),
+                                    )
+                                    df.at[_pi, 'Texto en Imagen'] = _txt_slides
+                                    df.at[_pi, 'Slides'] = int(_cv_slides)
+                                    st.session_state['parrilla_df'] = df
+                                    _save_df_to_db(df, meta.get('marca', ''), año, mes)
+                                    _github_sync_db()
+                                    st.success("✅ Texto de slides generado y guardado.")
+                                    st.rerun()
+                                except Exception as _exc_s:
+                                    st.error(f"Error al generar slides: {_exc_s}")
+                    else:
+                        _cv_slides = int(_prow.get('Slides', 1) or 1)
+
                     if not _is_visita:
                         if st.button("💾  Actualizar este post", type="primary",
                                      key=f"c_save_{_pi}", use_container_width=True):
@@ -3080,6 +3139,7 @@ def show_parrilla():
                             df.at[_pi, 'Texto en Imagen']           = _cv_img
                             df.at[_pi, 'Hashtags']                  = _cv_ht
                             df.at[_pi, 'Arte Sugerida']             = _cv_arte
+                            df.at[_pi, 'Slides']                    = _cv_slides
                             edited_df = df
                             st.session_state['parrilla_df'] = df
                             st.success(

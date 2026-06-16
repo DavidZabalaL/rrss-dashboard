@@ -95,15 +95,19 @@ def init_db():
             hashtags        TEXT,
             cta             TEXT,
             estado          TEXT DEFAULT 'Borrador',
+            num_slides      INTEGER DEFAULT 1,
             monday_item_id  TEXT,
             UNIQUE(marca, año, mes, fecha, tipo_dia)
         );
         """)
-        # Migración: agregar copy_imagen si la tabla ya existe sin esa columna
-        try:
-            con.execute("ALTER TABLE parrilla_posts ADD COLUMN copy_imagen TEXT")
-        except Exception:
-            pass  # La columna ya existe
+        for _migration in [
+            "ALTER TABLE parrilla_posts ADD COLUMN copy_imagen TEXT",
+            "ALTER TABLE parrilla_posts ADD COLUMN num_slides INTEGER DEFAULT 1",
+        ]:
+            try:
+                con.execute(_migration)
+            except Exception:
+                pass
 
 
 # ── Métricas diarias ──────────────────────────────────────────────────────────
@@ -347,8 +351,8 @@ def save_parrilla_posts(marca, año, mes, posts):
             con.execute("""
             INSERT INTO parrilla_posts
             (marca, año, mes, fecha, dia_semana, tipo_dia, pilar, formato, tema,
-             copy_linkedin, copy_facebook, copy_imagen, arte_sugerencia, hashtags, cta, estado)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             copy_linkedin, copy_facebook, copy_imagen, arte_sugerencia, hashtags, cta, estado, num_slides)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(marca, año, mes, fecha, tipo_dia) DO UPDATE SET
               dia_semana=excluded.dia_semana,
               pilar=excluded.pilar,
@@ -360,7 +364,8 @@ def save_parrilla_posts(marca, año, mes, posts):
               arte_sugerencia=excluded.arte_sugerencia,
               hashtags=excluded.hashtags,
               cta=excluded.cta,
-              estado=excluded.estado
+              estado=excluded.estado,
+              num_slides=excluded.num_slides
             """, (
                 marca, año, mes,
                 p.get('fecha'), p.get('dia_semana'), p.get('tipo_dia', 'regular'),
@@ -369,6 +374,7 @@ def save_parrilla_posts(marca, año, mes, posts):
                 p.get('copy_imagen'),
                 p.get('arte_sugerencia'), p.get('hashtags'), p.get('cta'),
                 p.get('estado', 'Borrador'),
+                int(p.get('num_slides') or 1),
             ))
 
 
