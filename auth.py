@@ -103,6 +103,9 @@ def check_login():
         st.markdown("<div style='height:10vh;'></div>", unsafe_allow_html=True)
 
         st.markdown(
+            "<p style='color:#1e90ff;font-family:monospace;font-size:.78rem;"
+            "letter-spacing:.28em;text-transform:uppercase;margin:0 0 6px;"
+            "font-weight:600;'>NEBULA</p>"
             "<h2 style='color:#dde3ee;font-size:1.4rem;font-weight:700;"
             "margin:0 0 4px;'>RRSS Analytics</h2>"
             "<p style='color:#5b8db8;font-size:.82rem;margin:0 0 32px;'>"
