@@ -521,40 +521,48 @@ with st.sidebar:
                 st.rerun()
 
 # ── Barra de filtros superior ─────────────────────────────────────────────────
-col_lbl, col_red, col_año, col_mes, col_sp, col_btn = st.columns([1.2, 2.2, 1.4, 2.2, 3, 2.2])
+# Solo se muestra en secciones que usan los filtros de red/año/mes
+_NAV_CON_FILTROS = {
+    "🎯  Monitor de KPIs",
+    "🏠  Dashboard",
+    "🔍  Analista de Contenido",
+    "🤖  Insights para IA",
+}
 
-with col_lbl:
-    st.markdown("""
-    <div style="margin-top:29px;display:inline-block;
-                background:rgba(30,144,255,.1);
-                border:1px solid rgba(30,144,255,.35);
-                border-radius:7px;padding:7px 13px;
-                color:#7ab3e0;font-size:.7rem;
-                text-transform:uppercase;letter-spacing:.1em;
-                white-space:nowrap;">
-      🔧 Filtros
-    </div>
-    """, unsafe_allow_html=True)
+if nav in _NAV_CON_FILTROS:
+    col_lbl, col_red, col_año, col_mes, col_sp, col_btn = st.columns([1.2, 2.2, 1.4, 2.2, 3, 2.2])
 
-with col_red:
-    st.selectbox("Red Social", REDES, key="f_red")
+    with col_lbl:
+        st.markdown("""
+        <div style="margin-top:29px;display:inline-block;
+                    background:rgba(30,144,255,.1);
+                    border:1px solid rgba(30,144,255,.35);
+                    border-radius:7px;padding:7px 13px;
+                    color:#7ab3e0;font-size:.7rem;
+                    text-transform:uppercase;letter-spacing:.1em;
+                    white-space:nowrap;">
+          🔧 Filtros
+        </div>
+        """, unsafe_allow_html=True)
 
-with col_año:
-    st.selectbox("Año", años_disp, key="f_año")
+    with col_red:
+        st.selectbox("Red Social", REDES, key="f_red")
 
-with col_mes:
-    st.selectbox("Mes", list(range(1, 13)), format_func=mes_nombre, key="f_mes")
+    with col_año:
+        st.selectbox("Año", años_disp, key="f_año")
 
-# col_sp vacío — empuja el botón a la derecha
-with col_btn:
-    st.markdown("<div style='margin-top:29px;'>", unsafe_allow_html=True)
-    if user.get('role') in ('admin', 'uploader'):
-        if st.button("📁 Importar Datos", use_container_width=True, key="btn_importar_top"):
-            st.session_state._nav_pending = "📁  Importar Datos"
-            st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with col_mes:
+        st.selectbox("Mes", list(range(1, 13)), format_func=mes_nombre, key="f_mes")
 
-st.markdown("---")
+    with col_btn:
+        st.markdown("<div style='margin-top:29px;'>", unsafe_allow_html=True)
+        if user.get('role') in ('admin', 'uploader'):
+            if st.button("📁 Importar Datos", use_container_width=True, key="btn_importar_top"):
+                st.session_state._nav_pending = "📁  Importar Datos"
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("---")
 
 # ── Routing ───────────────────────────────────────────────────────────────────
 if nav == "🎯  Monitor de KPIs":
