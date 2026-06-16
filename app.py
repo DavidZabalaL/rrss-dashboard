@@ -306,20 +306,16 @@ if not check_login():
 
 user = get_user()
 
-# ── Pleca superior — identidad Nebula ─────────────────────────────────────────
+# ── Nombre Nebula en header ───────────────────────────────────────────────────
 st.markdown("""
 <div style="
-  background: linear-gradient(90deg, #0a2a6e 0%, #1e90ff 45%, #0a2a6e 100%);
-  padding: 10px 0 9px;
   text-align: center;
-  margin-bottom: 6px;
-  border-radius: 6px;
-  letter-spacing: .32em;
-  font-family: monospace;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #ffffff;
-  text-shadow: 0 0 18px rgba(30,144,255,.9), 0 0 6px rgba(255,255,255,.4);
+  padding: 4px 0 8px;
+  letter-spacing: .45em;
+  font-family: 'Courier New', monospace;
+  font-size: 1.9rem;
+  font-weight: 300;
+  color: rgba(255,255,255,0.82);
 ">NEBULA</div>
 """, unsafe_allow_html=True)
 
