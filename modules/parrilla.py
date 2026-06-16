@@ -1748,13 +1748,13 @@ def _posts_from_db(db_posts):
         'pilar':           p.get('pilar', ''),
         'formato':         p.get('formato', ''),
         'tema':            p.get('tema', ''),
-        'copy_linkedin':   p.get('copy_linkedin', ''),
-        'copy_facebook':   p.get('copy_facebook', ''),
-        'copy_imagen':     p.get('copy_imagen', ''),
-        'arte_sugerencia': p.get('arte_sugerencia', ''),
-        'hashtags':        p.get('hashtags', ''),
-        'cta':             p.get('cta', ''),
-        'estado':          p.get('estado', 'Borrador'),
+        'copy_linkedin':   p.get('copy_linkedin')   or '',
+        'copy_facebook':   p.get('copy_facebook')   or '',
+        'copy_imagen':     p.get('copy_imagen')     or '',
+        'arte_sugerencia': p.get('arte_sugerencia') or '',
+        'hashtags':        p.get('hashtags')        or '',
+        'cta':             p.get('cta')             or '',
+        'estado':          p.get('estado')          or 'Borrador',
     } for p in db_posts]
     return _posts_to_df(posts)
 
@@ -2893,10 +2893,21 @@ def show_parrilla():
                 st.session_state.pop('_par_del_pending', None)
 
         # ── Completar Texto en Imagen con IA ─────────────────────────────────
+        def _es_vacio(val):
+            if val is None:
+                return True
+            try:
+                import math
+                if math.isnan(float(val)):
+                    return True
+            except (TypeError, ValueError):
+                pass
+            return not str(val).strip()
+
         if not _is_visita and len(edited_df) > 0:
             _vacíos = [
                 i for i, row in edited_df.iterrows()
-                if not str(row.get('Texto en Imagen', '') or '').strip()
+                if _es_vacio(row.get('Texto en Imagen', ''))
             ]
             if _vacíos:
                 _brand_lbl = brand.get('label', meta.get('marca', ''))
