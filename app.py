@@ -333,7 +333,7 @@ def _set_filter_defaults():
     from database import get_last_data_month, get_redes_con_datos
     marca_nombre = 'Kabat One' if st.session_state.marca_activa == 'k1' else 'SYM'
     redes = get_redes_con_datos(marca_nombre)
-    red   = redes[0] if redes else 'LinkedIn'
+    red   = 'LinkedIn' if 'LinkedIn' in redes else (redes[0] if redes else 'LinkedIn')
     last  = get_last_data_month(marca_nombre, red) if redes else None
     hoy   = date.today()
     if last:
