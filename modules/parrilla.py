@@ -3120,9 +3120,11 @@ def show_parrilla():
                                     df.at[_pi, 'Texto en Imagen'] = _txt_slides
                                     df.at[_pi, 'Slides'] = int(_cv_slides)
                                     st.session_state['parrilla_df'] = df
+                                    # Limpiar caché del widget para que muestre el valor nuevo
+                                    st.session_state.pop(f"c_img_{_pi}", None)
+                                    st.session_state.pop(f"c_slides_{_pi}", None)
                                     _save_df_to_db(df, meta.get('marca', ''), año, mes)
                                     _github_sync_db()
-                                    st.success("✅ Texto de slides generado y guardado.")
                                     st.rerun()
                                 except Exception as _exc_s:
                                     st.error(f"Error al generar slides: {_exc_s}")
