@@ -301,6 +301,12 @@ def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20,
         x, y = pad, bh - logo_h - pad
     elif position == 'top-right':
         x, y = bw - logo_w - pad, pad
+    elif position == 'top-left':
+        x, y = pad, pad
+    elif position == 'center-left':
+        x, y = pad, (bh - logo_h) // 2
+    elif position == 'center-right':
+        x, y = bw - logo_w - pad, (bh - logo_h) // 2
     elif position == 'center':
         x, y = (bw - logo_w) // 2, (bh - logo_h) // 2
     else:
@@ -384,11 +390,13 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
 
     # Position + size in two columns
     _pos_opts = {
-        '↘ Inf. derecha':   'bottom-right',
-        '↙ Inf. izquierda': 'bottom-left',
-        '↗ Sup. derecha':   'top-right',
-        '↖ Sup. izquierda': 'top-left',
-        '🔲 Centro':         'center',
+        '↘ Inf. derecha':     'bottom-right',
+        '↙ Inf. izquierda':   'bottom-left',
+        '↗ Sup. derecha':     'top-right',
+        '↖ Sup. izquierda':   'top-left',
+        '⬅ Centro izquierda': 'center-left',
+        '➡ Centro derecha':   'center-right',
+        '🔲 Centro':           'center',
     }
     _col_pos, _col_sz = st.columns([3, 2])
     with _col_pos:
@@ -437,6 +445,162 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             return _result
         except Exception as _le:
             st.error(f"Error al aplicar logo: {_le}")
+
+    return None
+
+
+def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85):
+    """Dibuja una pleca de color sobre la imagen. Retorna PNG bytes."""
+    from PIL import Image, ImageDraw
+
+    def _hex_to_rgb(h):
+        h = h.lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    base = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+    bw, bh = base.size
+    overlay = Image.new('RGBA', (bw, bh), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    r, g, b = _hex_to_rgb(color_hex)
+    alpha = int(opacity * 255)
+
+    if position in ('inferior', 'superior', 'centro-h'):
+        thick = int(bh * thickness_pct)
+        if position == 'inferior':
+            rect = (0, bh - thick, bw, bh)
+        elif position == 'superior':
+            rect = (0, 0, bw, thick)
+        else:  # centro-h
+            cy = bh // 2
+            rect = (0, cy - thick // 2, bw, cy + thick // 2)
+        draw.rectangle(rect, fill=(r, g, b, alpha))
+
+    elif position in ('izquierda', 'derecha', 'centro-v'):
+        thick = int(bw * thickness_pct)
+        if position == 'izquierda':
+            rect = (0, 0, thick, bh)
+        elif position == 'derecha':
+            rect = (bw - thick, 0, bw, bh)
+        else:  # centro-v
+            cx = bw // 2
+            rect = (cx - thick // 2, 0, cx + thick // 2, bh)
+        draw.rectangle(rect, fill=(r, g, b, alpha))
+
+    combined = Image.alpha_composite(base, overlay)
+    out = io.BytesIO()
+    combined.convert('RGB').save(out, format='PNG')
+    return out.getvalue()
+
+
+def _pleca_ui(key_prefix, img_bytes, brand):
+    """
+    Widget de plecas de marca. Retorna PNG bytes con la pleca aplicada, o None.
+    """
+    _panel_key = f"_pleca_panel_{key_prefix}"
+    _is_open   = st.session_state.get(_panel_key, False)
+
+    _btn_lbl = "✕ Cerrar pleca" if _is_open else "🎨 Agregar pleca"
+    if st.button(_btn_lbl, key=f"_pleca_btn_{key_prefix}"):
+        _is_open = not _is_open
+        st.session_state[_panel_key] = _is_open
+
+    if not _is_open:
+        return None
+
+    # Colores de marca disponibles
+    _brand_colors_raw = brand.get('colors', {})
+    _COLOR_LABELS = {
+        'primary':          'Primario',
+        'secondary':        'Secundario',
+        'accent':           'Acento',
+        'tertiary':         'Terciario',
+        'background_dark':  'Fondo oscuro',
+        'background_light': 'Fondo claro',
+    }
+    _brand_swatches = {
+        _COLOR_LABELS.get(k, k): v
+        for k, v in _brand_colors_raw.items()
+        if k in _COLOR_LABELS and v.startswith('#')
+    }
+    _swatch_names  = list(_brand_swatches.keys())
+    _swatch_values = list(_brand_swatches.values())
+
+    # Color selector: swatches de marca + picker libre
+    _pc1, _pc2 = st.columns([3, 2])
+    with _pc1:
+        _sel_swatch = st.selectbox(
+            "Color de marca",
+            _swatch_names,
+            key=f"_pleca_sw_{key_prefix}",
+        )
+    # Show color preview chips
+    _chips_html = "".join(
+        f'<span title="{n}" style="display:inline-block;width:20px;height:20px;'
+        f'background:{v};border-radius:4px;margin:2px;border:1px solid #444"></span>'
+        for n, v in _brand_swatches.items()
+    )
+    st.markdown(_chips_html, unsafe_allow_html=True)
+
+    with _pc2:
+        _custom_color = st.color_picker(
+            "O elige color libre",
+            value=_brand_swatches.get(_sel_swatch, '#00A1FF'),
+            key=f"_pleca_cp_{key_prefix}",
+        )
+
+    # Final color: if user changed the picker away from the selected swatch, use picker
+    _swatch_hex = _brand_swatches.get(_sel_swatch, '#00A1FF')
+    _final_color = _custom_color if _custom_color != _swatch_hex else _swatch_hex
+
+    # Position
+    _pleca_pos_opts = {
+        '⬇ Inferior (horizontal)':     'inferior',
+        '⬆ Superior (horizontal)':     'superior',
+        '↔ Centro horizontal':          'centro-h',
+        '⬅ Izquierda (vertical)':      'izquierda',
+        '➡ Derecha (vertical)':        'derecha',
+        '↕ Centro vertical':            'centro-v',
+    }
+    _pp1, _pp2, _pp3 = st.columns([3, 2, 2])
+    with _pp1:
+        _sel_pos = st.selectbox(
+            "Posición",
+            list(_pleca_pos_opts.keys()),
+            key=f"_pleca_pos_{key_prefix}",
+        )
+    with _pp2:
+        _thick_pct = st.slider(
+            "Grosor (%)",
+            min_value=2, max_value=35, value=8, step=1,
+            key=f"_pleca_thick_{key_prefix}",
+        )
+    with _pp3:
+        _opacity = st.slider(
+            "Opacidad (%)",
+            min_value=20, max_value=100, value=85, step=5,
+            key=f"_pleca_op_{key_prefix}",
+        )
+
+    _pos_val  = _pleca_pos_opts[_sel_pos]
+    _thick_f  = _thick_pct / 100
+    _opac_f   = _opacity   / 100
+
+    # Live preview
+    try:
+        _preview = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f)
+        st.caption("Vista previa:")
+        st.image(_preview, use_container_width=True)
+    except Exception:
+        pass
+
+    if st.button("✅ Aplicar pleca", key=f"_pleca_apply_{key_prefix}",
+                 type="primary", use_container_width=True):
+        try:
+            _result = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f)
+            st.session_state[_panel_key] = False
+            return _result
+        except Exception as _pe:
+            st.error(f"Error al aplicar pleca: {_pe}")
 
     return None
 
@@ -3148,6 +3312,13 @@ def show_parrilla():
                         else:
                             _up_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_up})
                         st.rerun()
+                    _pleca_res_up = _pleca_ui("up_editor_main", _up_current, brand)
+                    if _pleca_res_up is not None:
+                        if _up_hist and _up_hist[-1].get('instruction') == '[pleca agregada]':
+                            _up_hist[-1] = {'instruction': '[pleca agregada]', 'bytes': _pleca_res_up}
+                        else:
+                            _up_hist.append({'instruction': '[pleca agregada]', 'bytes': _pleca_res_up})
+                        st.rerun()
 
                 with _col_up_ctrl:
                     st.markdown("**Editar con IA**")
@@ -3352,6 +3523,16 @@ def show_parrilla():
                                         for _upd in st.session_state[_car_imgs_key]:
                                             if _upd['numero'] == _gsl['numero']:
                                                 _upd['bytes'] = _logo_res_sl
+                                                break
+                                        st.rerun()
+                                    _pleca_res_sl = _pleca_ui(
+                                        f"car_{_car_imgs_key}_slp{_gsl['numero']}",
+                                        _gsl['bytes'], brand,
+                                    )
+                                    if _pleca_res_sl is not None:
+                                        for _upd in st.session_state[_car_imgs_key]:
+                                            if _upd['numero'] == _gsl['numero']:
+                                                _upd['bytes'] = _pleca_res_sl
                                                 break
                                         st.rerun()
                                     _edit_open = st.session_state.get(_car_edit_key) == _gsl['numero']
@@ -3695,6 +3876,13 @@ def show_parrilla():
                                         _edit_hist[-1] = {'instruction': '[logo agregado]', 'bytes': _logo_res_img4}
                                     else:
                                         _edit_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_img4})
+                                    st.rerun()
+                                _pleca_res_img4 = _pleca_ui(f"img4p_{_img4_cache}", _cur_bytes, brand)
+                                if _pleca_res_img4 is not None:
+                                    if _edit_hist and _edit_hist[-1].get('instruction') == '[pleca agregada]':
+                                        _edit_hist[-1] = {'instruction': '[pleca agregada]', 'bytes': _pleca_res_img4}
+                                    else:
+                                        _edit_hist.append({'instruction': '[pleca agregada]', 'bytes': _pleca_res_img4})
                                     st.rerun()
 
                             with _col_ctrl_ed:
