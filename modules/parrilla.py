@@ -1496,6 +1496,37 @@ Modifiqué los posts del 7 y 14 de julio para enfocarlos en Educación Técnica 
 """
 
 
+# ── Copy-to-clipboard button ───────────────────────────────────────────────────
+
+def _copy_button(text: str):
+    """Renders a small JS copy-to-clipboard button inside an iframe."""
+    import streamlit.components.v1 as components
+    safe = json.dumps(text)
+    components.html(
+        f"""<button
+          onclick="(function(btn){{
+            var txt={safe};
+            navigator.clipboard.writeText(txt).then(function(){{
+              btn.textContent='✅ Copiado';
+              setTimeout(function(){{btn.textContent='📋 Copiar prompt'}},2000);
+            }}).catch(function(){{
+              var ta=document.createElement('textarea');
+              ta.value=txt; document.body.appendChild(ta);
+              ta.select(); document.execCommand('copy');
+              document.body.removeChild(ta);
+              btn.textContent='✅ Copiado';
+              setTimeout(function(){{btn.textContent='📋 Copiar prompt'}},2000);
+            }});
+          }})(this)"
+          style="background:#1e90ff;color:#fff;border:none;padding:6px 0;
+                 border-radius:6px;cursor:pointer;font-size:.82rem;
+                 width:100%;font-family:sans-serif;">
+          📋 Copiar prompt
+        </button>""",
+        height=38,
+    )
+
+
 # ── Image Prompt Builder ───────────────────────────────────────────────────────
 
 def _build_image_prompt_request(row, brand, red_formato, style='libre'):
@@ -4107,6 +4138,7 @@ def show_parrilla():
                                 height=260,
                                 key="dalle_prompt_area",
                             )
+                            _copy_button(_full_dalle)
                             notas = dalle.get('notas', '')
                             if notas:
                                 st.caption(f"💡 {notas}")
@@ -4124,6 +4156,7 @@ def show_parrilla():
                                 height=260,
                                 key="gemini_prompt_area",
                             )
+                            _copy_button(_full_gemini)
                             notas_g = gemini.get('notas', '')
                             if notas_g:
                                 st.caption(f"💡 {notas_g}")
