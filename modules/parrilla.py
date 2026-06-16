@@ -1499,10 +1499,11 @@ Modifiqué los posts del 7 y 14 de julio para enfocarlos en Educación Técnica 
 # ── Image Prompt Builder ───────────────────────────────────────────────────────
 
 def _build_image_prompt_request(row, brand, red_formato, style='libre'):
-    tema   = str(row.get('Tema', ''))
-    pilar  = str(row.get('Pilar', ''))
-    arte   = str(row.get('Arte Sugerida', ''))
-    copy   = str(row.get('Copy LinkedIn', ''))[:300]
+    tema          = str(row.get('Tema', ''))
+    pilar         = str(row.get('Pilar', ''))
+    arte          = str(row.get('Arte Sugerida', ''))
+    copy          = str(row.get('Copy LinkedIn', ''))[:300]
+    texto_imagen  = str(row.get('Texto en Imagen', '') or '')
     fmt    = str(row.get('Formato', ''))
     fecha  = str(row.get('Fecha', ''))
     tipo   = str(row.get('Tipo', 'regular'))
@@ -1563,7 +1564,9 @@ PUBLICACIÓN:
 - Formato: {fmt}
 - Tema: {tema}
 - Sugerencia de arte original: {arte}
-- Copy de referencia: {copy}…
+- Copy de referencia: {copy}…{f'''
+- Texto en imagen (overlay que el diseñador añade en postproducción): {texto_imagen}
+  → Deja espacio compositivo libre (zona inferior o superior) para este texto; úsalo como guía visual del mensaje central.''' if texto_imagen else ''}
 - Tono de marca: {tone}
 - Evitar: {avoid}
 - Formato de imagen destino: {aspect}
@@ -1571,7 +1574,7 @@ PUBLICACIÓN:
 {style_section}
 
 REGLAS GENERALES:
-- Sin texto ni logos en la imagen
+- Sin texto ni logotipos generados por IA en la imagen (el copy se añade en postproducción)
 - Evitar imágenes de conflicto, violencia o armas
 - Preferir tecnología, profesionalismo, modernidad, entornos urbanos de México/LatAm
 - Los prompts deben ser en INGLÉS
