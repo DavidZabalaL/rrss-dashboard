@@ -487,8 +487,56 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     return None
 
 
+def _get_pil_font(size):
+    from PIL import ImageFont
+    size = max(8, size)
+    for p in [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+        '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+        '/System/Library/Fonts/Helvetica.ttc',
+        '/Library/Fonts/Arial Bold.ttf',
+        '/Library/Fonts/Arial.ttf',
+    ]:
+        try:
+            return ImageFont.truetype(p, size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def _parse_texto_imagen(texto):
+    """Extrae (headline, subtitle) de un string de Texto en Imagen."""
+    if not texto:
+        return '', ''
+    lines = [l.strip() for l in str(texto).replace('\\n', '\n').split('\n') if l.strip()]
+    h, s = '', ''
+    for ln in lines:
+        lo = ln.lower()
+        for pfx in ('headline:', 'título:', 'titulo:'):
+            if lo.startswith(pfx):
+                h = ln.split(':', 1)[1].strip()
+                break
+        for pfx in ('subtítulo:', 'subtitulo:', 'subtitle:'):
+            if lo.startswith(pfx):
+                s = ln.split(':', 1)[1].strip()
+                break
+    if not h and lines:
+        h = lines[0]
+    if not s and len(lines) > 1:
+        cand = lines[1]
+        if not cand.lower().startswith(('arte ', 'slide ')):
+            s = cand
+    return h, s
+
+
 def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85,
-                     shadow=False, shadow_intensity=60):
+                     shadow=False, shadow_intensity=60,
+                     texto='', font_color='#FFFFFF'):
     """Dibuja una pleca de color sobre la imagen. Retorna PNG bytes."""
     from PIL import Image, ImageDraw, ImageFilter
 
@@ -552,12 +600,51 @@ def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85
         base = Image.alpha_composite(base, shadow_layer)
 
     combined = Image.alpha_composite(base, overlay)
+
+    # Render texto sobre la pleca
+    if texto and texto.strip():
+        h_text, s_text = _parse_texto_imagen(texto)
+        if h_text:
+            tr, tg, tb = _hex_to_rgb(font_color)
+            font_size_h = max(14, min(72, int(thick * 0.38)))
+            font_size_s = max(10, min(52, int(thick * 0.23)))
+            font_h = _get_pil_font(font_size_h)
+            font_s = _get_pil_font(font_size_s) if s_text else None
+
+            tdraw = ImageDraw.Draw(combined)
+            rx1, ry1, rx2, ry2 = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
+
+            def _measure(font, text):
+                try:
+                    bb = font.getbbox(text)
+                    return bb[2] - bb[0], bb[3] - bb[1]
+                except Exception:
+                    return len(text) * font_size_h // 2, font_size_h
+
+            wh, hh = _measure(font_h, h_text)
+            ws, hs = (_measure(font_s, s_text) if font_s else (0, 0))
+            gap   = max(4, int(thick * 0.06)) if s_text else 0
+            total = hh + gap + hs
+            sy    = ry1 + ((ry2 - ry1) - total) // 2
+
+            # Headline
+            xh = rx1 + (rx2 - rx1 - wh) // 2
+            tdraw.text((xh + 1, sy + 1), h_text, font=font_h, fill=(0, 0, 0, 150))
+            tdraw.text((xh,     sy),     h_text, font=font_h, fill=(tr, tg, tb, 255))
+
+            # Subtitle
+            if s_text and font_s:
+                xs  = rx1 + (rx2 - rx1 - ws) // 2
+                sub_y = sy + hh + gap
+                tdraw.text((xs + 1, sub_y + 1), s_text, font=font_s, fill=(0, 0, 0, 150))
+                tdraw.text((xs,     sub_y),     s_text, font=font_s, fill=(tr, tg, tb, 255))
+
     out = io.BytesIO()
     combined.convert('RGB').save(out, format='PNG')
     return out.getvalue()
 
 
-def _pleca_ui(key_prefix, img_bytes, brand):
+def _pleca_ui(key_prefix, img_bytes, brand, texto=''):
     """
     Widget de plecas de marca. Retorna PNG bytes con la pleca aplicada, o None.
     """
@@ -666,10 +753,38 @@ def _pleca_ui(key_prefix, img_bytes, brand):
     _thick_f  = _thick_pct / 100
     _opac_f   = _opacity   / 100
 
+    # Texto sobre la pleca
+    st.markdown("**✏️ Texto sobre la pleca** *(opcional)*")
+    _txt_cols = st.columns([1, 2])
+    with _txt_cols[0]:
+        _use_texto = st.checkbox(
+            "Agregar texto",
+            value=bool(texto and texto.strip()),
+            key=f"_pleca_txt_on_{key_prefix}",
+        )
+        _font_color = st.color_picker(
+            "Color de texto",
+            value='#FFFFFF',
+            key=f"_pleca_fc_{key_prefix}",
+            disabled=not _use_texto,
+        )
+    with _txt_cols[1]:
+        _texto_val = st.text_area(
+            "Headline / Subtítulo",
+            value=texto or '',
+            height=100,
+            key=f"_pleca_txt_{key_prefix}",
+            disabled=not _use_texto,
+            help="Formato sugerido:\nHeadline: Tu título aquí\nSubtítulo: Texto secundario",
+        )
+
+    _texto_final = _texto_val.strip() if _use_texto else ''
+
     # Live preview
     try:
         _preview = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
-                                    shadow=_use_shadow, shadow_intensity=_shadow_int)
+                                    shadow=_use_shadow, shadow_intensity=_shadow_int,
+                                    texto=_texto_final, font_color=_font_color)
         st.caption("Vista previa:")
         st.image(_preview, use_container_width=True)
     except Exception:
@@ -679,7 +794,8 @@ def _pleca_ui(key_prefix, img_bytes, brand):
                  type="primary", use_container_width=True):
         try:
             _result = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
-                                       shadow=_use_shadow, shadow_intensity=_shadow_int)
+                                       shadow=_use_shadow, shadow_intensity=_shadow_int,
+                                       texto=_texto_final, font_color=_font_color)
             st.session_state[_panel_key] = False
             return _result
         except Exception as _pe:
@@ -4281,7 +4397,8 @@ def show_parrilla():
                                     else:
                                         _edit_hist.append({'instruction': '[logo agregado]', 'bytes': _logo_res_img4})
                                     st.rerun()
-                                _pleca_res_img4 = _pleca_ui(f"img4p_{_img4_cache}", _cur_bytes, brand)
+                                _pleca_res_img4 = _pleca_ui(f"img4p_{_img4_cache}", _cur_bytes, brand,
+                                                            texto=str(sel_row.get('Texto en Imagen', '') or ''))
                                 if _pleca_res_img4 is not None:
                                     if _edit_hist and _edit_hist[-1].get('instruction') == '[pleca agregada]':
                                         _edit_hist[-1] = {'instruction': '[pleca agregada]', 'bytes': _pleca_res_img4}
