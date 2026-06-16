@@ -2892,6 +2892,56 @@ def show_parrilla():
             else:
                 st.session_state.pop('_par_del_pending', None)
 
+        # ── Completar Texto en Imagen con IA ─────────────────────────────────
+        if not _is_visita and len(edited_df) > 0:
+            _vacíos = [
+                i for i, row in edited_df.iterrows()
+                if not str(row.get('Texto en Imagen', '') or '').strip()
+            ]
+            if _vacíos:
+                _brand_lbl = brand.get('label', meta.get('marca', ''))
+                st.info(
+                    f"✏️ **{len(_vacíos)} post(s) sin Texto en Imagen** — "
+                    "haz clic para que la IA los complete con headline/slides/datos "
+                    "según el formato de cada post."
+                )
+                if st.button(
+                    f"✨  Completar Texto en Imagen ({len(_vacíos)} post(s)) con IA",
+                    key="btn_completar_texto_img",
+                    type="primary",
+                    use_container_width=False,
+                ):
+                    _progreso = st.progress(0, text="Generando textos de imagen…")
+                    _errores  = 0
+                    for _idx_n, _row_i in enumerate(_vacíos):
+                        _row      = edited_df.loc[_row_i]
+                        _copy_ref = (str(_row.get('Copy LinkedIn', '') or '')
+                                     or str(_row.get('Copy Facebook / Instagram', '') or ''))
+                        try:
+                            _txt = _generate_texto_imagen_ai(
+                                tema        = str(_row.get('Tema',    '') or ''),
+                                formato     = str(_row.get('Formato', '') or ''),
+                                pilar       = str(_row.get('Pilar',   '') or ''),
+                                copy_ref    = _copy_ref,
+                                brand_label = _brand_lbl,
+                            )
+                            edited_df.at[_row_i, 'Texto en Imagen'] = _txt
+                        except Exception:
+                            _errores += 1
+                        _progreso.progress(
+                            (_idx_n + 1) / len(_vacíos),
+                            text=f"Post {_idx_n + 1}/{len(_vacíos)}…",
+                        )
+                    st.session_state['parrilla_df'] = edited_df
+                    _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
+                    _github_sync_db()
+                    _progreso.empty()
+                    if _errores:
+                        st.warning(f"Generados con {_errores} error(es). Revisa las cards.")
+                    else:
+                        st.success(f"✅ {len(_vacíos)} texto(s) en imagen generados y guardados.")
+                    st.rerun()
+
         # ── Cards de contenido (una por post, colapsadas por defecto) ──────────
         if len(df) > 0:
             st.markdown("---")
@@ -2967,53 +3017,6 @@ def show_parrilla():
                                 "Actualizado en memoria. Presiona "
                                 "**💾 Guardar cambios** para persistir."
                             )
-
-        # ── Completar Texto en Imagen con IA ─────────────────────────────────
-        if not _is_visita:
-            _vacíos = [
-                i for i, row in edited_df.iterrows()
-                if not str(row.get('Texto en Imagen', '') or '').strip()
-            ]
-            if _vacíos:
-                _brand_lbl = brand.get('label', meta.get('marca', ''))
-                _cai1, _cai2 = st.columns([2.5, 4])
-                _cai2.caption(
-                    f"✏️ {len(_vacíos)} post(s) sin texto en imagen — "
-                    "la IA generará headline/slides/datos según el formato de cada post."
-                )
-                if _cai1.button(
-                    f"✨ Completar Texto en Imagen ({len(_vacíos)} post(s))",
-                    key="btn_completar_texto_img",
-                ):
-                    _progreso = st.progress(0, text="Generando textos de imagen…")
-                    _errores  = 0
-                    for _idx_n, _row_i in enumerate(_vacíos):
-                        _row = edited_df.loc[_row_i]
-                        _copy_ref = str(_row.get('Copy LinkedIn', '') or '') or str(_row.get('Copy Facebook / Instagram', '') or '')
-                        try:
-                            _txt = _generate_texto_imagen_ai(
-                                tema      = str(_row.get('Tema',    '') or ''),
-                                formato   = str(_row.get('Formato', '') or ''),
-                                pilar     = str(_row.get('Pilar',   '') or ''),
-                                copy_ref  = _copy_ref,
-                                brand_label = _brand_lbl,
-                            )
-                            edited_df.at[_row_i, 'Texto en Imagen'] = _txt
-                        except Exception:
-                            _errores += 1
-                        _progreso.progress(
-                            (_idx_n + 1) / len(_vacíos),
-                            text=f"Post {_idx_n + 1}/{len(_vacíos)} procesado…",
-                        )
-                    st.session_state['parrilla_df'] = edited_df
-                    _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
-                    _github_sync_db()
-                    _progreso.empty()
-                    if _errores:
-                        st.warning(f"✅ Textos generados con {_errores} error(es). Revisa las cards.")
-                    else:
-                        st.success(f"✅ {len(_vacíos)} texto(s) en imagen generados y guardados.")
-                    st.rerun()
 
         # Botones de guardar y descargar
         col_save, col_dl, col_info = st.columns([1.5, 1.5, 3])
