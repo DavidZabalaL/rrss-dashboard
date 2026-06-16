@@ -1496,37 +1496,6 @@ Modifiqué los posts del 7 y 14 de julio para enfocarlos en Educación Técnica 
 """
 
 
-# ── Copy-to-clipboard button ───────────────────────────────────────────────────
-
-def _copy_button(text: str):
-    """Renders a small JS copy-to-clipboard button inside an iframe."""
-    import streamlit.components.v1 as components
-    safe = json.dumps(text)
-    components.html(
-        f"""<button
-          onclick="(function(btn){{
-            var txt={safe};
-            navigator.clipboard.writeText(txt).then(function(){{
-              btn.textContent='✅ Copiado';
-              setTimeout(function(){{btn.textContent='📋 Copiar prompt'}},2000);
-            }}).catch(function(){{
-              var ta=document.createElement('textarea');
-              ta.value=txt; document.body.appendChild(ta);
-              ta.select(); document.execCommand('copy');
-              document.body.removeChild(ta);
-              btn.textContent='✅ Copiado';
-              setTimeout(function(){{btn.textContent='📋 Copiar prompt'}},2000);
-            }});
-          }})(this)"
-          style="background:#1e90ff;color:#fff;border:none;padding:6px 0;
-                 border-radius:6px;cursor:pointer;font-size:.82rem;
-                 width:100%;font-family:sans-serif;">
-          📋 Copiar prompt
-        </button>""",
-        height=38,
-    )
-
-
 # ── Image Prompt Builder ───────────────────────────────────────────────────────
 
 def _build_image_prompt_request(row, brand, red_formato, style='libre'):
@@ -4145,13 +4114,7 @@ def show_parrilla():
                             dalle = result.get('dalle3', {})
                             prompt_text = dalle.get('prompt', '')
                             _full_dalle = f"{prompt_text}\n\n{_MASTER_PROMPTS[_style_value]}" if _style_value in _MASTER_PROMPTS else prompt_text
-                            st.text_area(
-                                "Prompt completo (escena + estilo master)",
-                                value=_full_dalle,
-                                height=260,
-                                key="dalle_prompt_area",
-                            )
-                            _copy_button(_full_dalle)
+                            st.code(_full_dalle, language=None)
                             notas = dalle.get('notas', '')
                             if notas:
                                 st.caption(f"💡 {notas}")
@@ -4163,13 +4126,7 @@ def show_parrilla():
                             gemini = result.get('gemini', {})
                             prompt_text_g = gemini.get('prompt', '')
                             _full_gemini = f"{prompt_text_g}\n\n{_MASTER_PROMPTS[_style_value]}" if _style_value in _MASTER_PROMPTS else prompt_text_g
-                            st.text_area(
-                                "Prompt completo (escena + estilo master)",
-                                value=_full_gemini,
-                                height=260,
-                                key="gemini_prompt_area",
-                            )
-                            _copy_button(_full_gemini)
+                            st.code(_full_gemini, language=None)
                             notas_g = gemini.get('notas', '')
                             if notas_g:
                                 st.caption(f"💡 {notas_g}")
