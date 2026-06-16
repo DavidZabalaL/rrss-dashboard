@@ -2601,12 +2601,14 @@ def show_parrilla():
         _row_h = min(38 * max(len(compact_df), 1) + 42, 500)
 
         if _is_visita:
-            st.dataframe(compact_df, use_container_width=True, height=_row_h)
+            st.dataframe(compact_df, use_container_width=True, height=_row_h,
+                         hide_index=True)
             compact_edited = compact_df.copy()
         else:
             compact_edited = st.data_editor(
                 compact_df, use_container_width=True, num_rows='fixed',
                 column_config=_ccfg, height=_row_h, key='parrilla_compact',
+                hide_index=True,
             )
 
         # Sincronizar cambios de la vista compacta de vuelta al df completo
@@ -2617,34 +2619,48 @@ def show_parrilla():
         edited_df = df
         st.session_state['parrilla_df'] = edited_df
 
-        # ── Confirmar y ejecutar eliminación ─────────────────────────────────
+        # ── Eliminar: botón explícito primero, confirmación después ──────────
         if not _is_visita and '🗑️' in compact_edited.columns:
-            _del_mask   = compact_edited['🗑️'] == True
-            _del_rows   = compact_edited[_del_mask]
-            if not _del_rows.empty:
-                _del_fechas = _del_rows['Fecha'].astype(str).tolist()
-                _del_tipos  = (_del_rows['Tipo'].astype(str).tolist()
-                               if 'Tipo' in _del_rows.columns
-                               else ['regular'] * len(_del_rows))
-                st.warning(
-                    f"⚠️ Vas a eliminar **{len(_del_rows)} post(s)**: "
-                    + ', '.join(_del_fechas)
-                )
-                _cy, _cn, _ = st.columns([1.2, 1, 4])
-                if _cy.button("🗑️ Confirmar eliminación", type="primary",
-                               key="btn_del_confirm"):
-                    from database import delete_parrilla_post as _del_fn
-                    _marca_del = meta.get('marca', '')
-                    for _fd, _td in zip(_del_fechas, _del_tipos):
-                        _del_fn(_marca_del, año, mes, _fd, _td)
-                    _github_sync_db()
-                    from database import get_parrilla_posts as _gpp_del
-                    _new_posts = _gpp_del(_marca_del, año, mes)
-                    st.session_state['parrilla_df'] = _posts_to_df(_new_posts)
-                    st.success(f"✅ {len(_del_rows)} post(s) eliminado(s).")
-                    st.rerun()
-                if _cn.button("Cancelar", key="btn_del_cancel"):
-                    st.rerun()
+            _del_mask  = compact_edited['🗑️'] == True
+            _del_rows  = compact_edited[_del_mask]
+            _del_count = len(_del_rows)
+
+            if _del_count > 0:
+                st.markdown("")
+                if st.button(
+                    f"🗑️  Eliminar {_del_count} post(s) marcado(s)",
+                    key="btn_del_request",
+                ):
+                    st.session_state['_par_del_pending'] = True
+
+                if st.session_state.get('_par_del_pending'):
+                    _del_fechas = _del_rows['Fecha'].astype(str).tolist()
+                    _del_tipos  = (_del_rows['Tipo'].astype(str).tolist()
+                                   if 'Tipo' in _del_rows.columns
+                                   else ['regular'] * _del_count)
+                    st.warning(
+                        f"⚠️ Esta acción es permanente. Se eliminarán: "
+                        f"**{', '.join(_del_fechas)}**"
+                    )
+                    _cy, _cn, _ = st.columns([1.2, 1, 4])
+                    if _cy.button("✅  Confirmar eliminación", type="primary",
+                                  key="btn_del_confirm"):
+                        from database import delete_parrilla_post as _del_fn
+                        _marca_del = meta.get('marca', '')
+                        for _fd, _td in zip(_del_fechas, _del_tipos):
+                            _del_fn(_marca_del, año, mes, _fd, _td)
+                        _github_sync_db()
+                        from database import get_parrilla_posts as _gpp_del
+                        _new_posts = _gpp_del(_marca_del, año, mes)
+                        st.session_state['parrilla_df'] = _posts_to_df(_new_posts)
+                        st.session_state.pop('_par_del_pending', None)
+                        st.success(f"✅ {_del_count} post(s) eliminado(s).")
+                        st.rerun()
+                    if _cn.button("Cancelar", key="btn_del_cancel"):
+                        st.session_state.pop('_par_del_pending', None)
+                        st.rerun()
+            else:
+                st.session_state.pop('_par_del_pending', None)
 
         # ── Cards de contenido (una por post, colapsadas por defecto) ──────────
         if len(df) > 0:
