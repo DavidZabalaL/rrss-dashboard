@@ -605,6 +605,63 @@ def _pleca_ui(key_prefix, img_bytes, brand):
     return None
 
 
+def _generate_texto_imagen_ai(tema, formato, pilar, copy_ref, brand_label):
+    """Genera el texto que debe ir DENTRO del arte/imagen usando Gemini.
+    Retorna un string con el texto sugerido."""
+    import urllib.request
+    key = _get_gemini_key()
+    url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+           f'gemini-2.5-flash:generateContent?key={key}')
+
+    fmt_lower = (formato or '').lower()
+    if 'carrusel' in fmt_lower or 'carousel' in fmt_lower:
+        instruccion_formato = (
+            "Genera el texto para un CARRUSEL de máximo 5 slides. "
+            "Para cada slide escribe: 'Slide N: [título corto] / [frase o dato breve]'. "
+            "El primer slide es el portada (gancho). Los siguientes desarrollan el tema. "
+            "Máximo 8 palabras por línea."
+        )
+    elif 'infograf' in fmt_lower:
+        instruccion_formato = (
+            "Genera el texto para una INFOGRAFÍA. "
+            "Escribe: Título principal (máx 8 palabras), luego 3-5 puntos con dato o hecho clave. "
+            "Formato: 'Título: [...]' y 'Punto N: [dato breve]'."
+        )
+    elif 'video' in fmt_lower or 'reel' in fmt_lower:
+        instruccion_formato = (
+            "Genera el texto para un VIDEO/REEL (texto en pantalla). "
+            "Escribe el texto de apertura (hook, máx 6 palabras) y 2-3 frases clave que aparecerán en pantalla."
+        )
+    else:
+        instruccion_formato = (
+            "Genera el texto para una IMAGEN ESTÁTICA. "
+            "Escribe: Headline impactante (máx 8 palabras) y subtítulo de apoyo (máx 15 palabras). "
+            "Formato: 'Headline: [...]' y 'Subtítulo: [...]'."
+        )
+
+    prompt = (
+        f"Eres redactor de contenido para {brand_label}. "
+        f"Genera el texto que irá DENTRO del diseño/arte (NO es el copy de la publicación en redes).\n\n"
+        f"Datos del post:\n"
+        f"- Formato: {formato or 'Imagen estática'}\n"
+        f"- Pilar: {pilar or 'General'}\n"
+        f"- Tema: {tema or '(sin tema)'}\n"
+        f"- Copy de referencia: {(copy_ref or '')[:400]}\n\n"
+        f"{instruccion_formato}\n\n"
+        f"Responde ÚNICAMENTE con el texto de imagen, sin explicaciones. En español."
+    )
+
+    body = json.dumps({
+        'contents': [{'parts': [{'text': prompt}]}],
+        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 400},
+    }).encode()
+    req  = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+    resp = urllib.request.urlopen(req, timeout=30)
+    data = json.loads(resp.read())
+    parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+    return parts[0].get('text', '').strip() if parts else ''
+
+
 def _edit_imagen_gemini(image_bytes, instruction):
     """Send image + text instruction to Gemini image editing model. Returns PNG bytes."""
     import urllib.request
@@ -2910,6 +2967,53 @@ def show_parrilla():
                                 "Actualizado en memoria. Presiona "
                                 "**💾 Guardar cambios** para persistir."
                             )
+
+        # ── Completar Texto en Imagen con IA ─────────────────────────────────
+        if not _is_visita:
+            _vacíos = [
+                i for i, row in edited_df.iterrows()
+                if not str(row.get('Texto en Imagen', '') or '').strip()
+            ]
+            if _vacíos:
+                _brand_lbl = brand.get('label', meta.get('marca', ''))
+                _cai1, _cai2 = st.columns([2.5, 4])
+                _cai2.caption(
+                    f"✏️ {len(_vacíos)} post(s) sin texto en imagen — "
+                    "la IA generará headline/slides/datos según el formato de cada post."
+                )
+                if _cai1.button(
+                    f"✨ Completar Texto en Imagen ({len(_vacíos)} post(s))",
+                    key="btn_completar_texto_img",
+                ):
+                    _progreso = st.progress(0, text="Generando textos de imagen…")
+                    _errores  = 0
+                    for _idx_n, _row_i in enumerate(_vacíos):
+                        _row = edited_df.loc[_row_i]
+                        _copy_ref = str(_row.get('Copy LinkedIn', '') or '') or str(_row.get('Copy Facebook / Instagram', '') or '')
+                        try:
+                            _txt = _generate_texto_imagen_ai(
+                                tema      = str(_row.get('Tema',    '') or ''),
+                                formato   = str(_row.get('Formato', '') or ''),
+                                pilar     = str(_row.get('Pilar',   '') or ''),
+                                copy_ref  = _copy_ref,
+                                brand_label = _brand_lbl,
+                            )
+                            edited_df.at[_row_i, 'Texto en Imagen'] = _txt
+                        except Exception:
+                            _errores += 1
+                        _progreso.progress(
+                            (_idx_n + 1) / len(_vacíos),
+                            text=f"Post {_idx_n + 1}/{len(_vacíos)} procesado…",
+                        )
+                    st.session_state['parrilla_df'] = edited_df
+                    _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
+                    _github_sync_db()
+                    _progreso.empty()
+                    if _errores:
+                        st.warning(f"✅ Textos generados con {_errores} error(es). Revisa las cards.")
+                    else:
+                        st.success(f"✅ {len(_vacíos)} texto(s) en imagen generados y guardados.")
+                    st.rerun()
 
         # Botones de guardar y descargar
         col_save, col_dl, col_info = st.columns([1.5, 1.5, 3])
