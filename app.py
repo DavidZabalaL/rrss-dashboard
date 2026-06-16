@@ -313,7 +313,7 @@ st.markdown("""
   padding: 4px 0 8px;
   letter-spacing: .45em;
   font-family: 'Courier New', monospace;
-  font-size: 1.9rem;
+  font-size: 2.8rem;
   font-weight: 300;
   color: rgba(255,255,255,0.82);
 ">NEBULA</div>
