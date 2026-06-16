@@ -120,6 +120,65 @@ IMPORTANTE:
 Responde en español. Sé directo y concreto — nada de copy genérico o corporativo vacío."""
 
 
+def _parse_post_sections(text: str, redes_str: str) -> dict:
+    """Divide el texto de la IA en secciones LinkedIn/Facebook y extrae metadata."""
+    import re
+    result = {'copy_linkedin': '', 'copy_facebook': '', 'hashtags': '', 'arte_sugerencia': '', 'cta': ''}
+
+    # Detectar límites de cada sección por encabezado
+    li_idx = fb_idx = -1
+    for pat in [r'##\s*linkedin', r'###\s*linkedin', r'\*\*linkedin\*\*']:
+        m = re.search(pat, text, re.I)
+        if m:
+            li_idx = m.start(); break
+    for pat in [r'##\s*facebook', r'###\s*facebook', r'\*\*facebook\*\*',
+                r'##\s*instagram', r'facebook/instagram']:
+        m = re.search(pat, text, re.I)
+        if m:
+            fb_idx = m.start(); break
+
+    if li_idx >= 0 and fb_idx >= 0:
+        if li_idx < fb_idx:
+            li_text = text[li_idx:fb_idx].strip()
+            fb_text = text[fb_idx:].strip()
+        else:
+            fb_text = text[fb_idx:li_idx].strip()
+            li_text = text[li_idx:].strip()
+    elif li_idx >= 0:
+        li_text, fb_text = text[li_idx:].strip(), ''
+    elif fb_idx >= 0:
+        fb_text, li_text = text[fb_idx:].strip(), ''
+    else:
+        if 'Facebook' in redes_str:
+            fb_text, li_text = text, ''
+        else:
+            li_text, fb_text = text, ''
+
+    result['copy_linkedin'] = li_text
+    result['copy_facebook'] = fb_text
+
+    # Extraer hashtags
+    src = li_text or fb_text or text
+    htag_m = re.search(r'\*\*HASHTAGS[^*]*\*+\s*\n?((?:#\w+\s*)+)', src, re.I)
+    if htag_m:
+        result['hashtags'] = htag_m.group(1).strip()
+    else:
+        all_tags = list(dict.fromkeys(re.findall(r'#\w+', src)))
+        result['hashtags'] = ' '.join(all_tags[:10])
+
+    # Extraer arte sugerida
+    arte_m = re.search(r'\*\*ARTE\s+SUGERID[AO][^*]*\*+\s*[\n:]?\s*(.+?)(?=\n\n|\*\*|$)', src, re.I | re.S)
+    if arte_m:
+        result['arte_sugerencia'] = arte_m.group(1).strip()[:300]
+
+    # Extraer CTA
+    cta_m = re.search(r'\*\*CTA[^*]*\*+\s*[\n:]?\s*(.+?)(?=\n\n|\*\*|$)', src, re.I | re.S)
+    if cta_m:
+        result['cta'] = cta_m.group(1).strip()[:200]
+
+    return result
+
+
 def _stream_quick_post(prompt):
     if _ai_provider() == 'gemini':
         import json, urllib.request
@@ -312,8 +371,64 @@ def show_post_quick():
                     key="pq_copy_area",
                 )
 
+        # ── Enviar a Parrilla ──────────────────────────────────────────────────
         st.markdown("---")
-        st.info(
-            "**¿Quedó bien?** Puedes agregar este post a la parrilla del mes "
-            "directamente en **📅 Parrilla de Contenido** como una fila nueva."
-        )
+        with st.expander("➕  Agregar a Parrilla del mes", expanded=False):
+            from datetime import date as _date
+            from database import save_parrilla_posts
+            import sync as _sync
+
+            _MESES_ES = {1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
+                         7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"}
+            _DIAS_ES  = {0:'Lunes',1:'Martes',2:'Miércoles',3:'Jueves',
+                         4:'Viernes',5:'Sábado',6:'Domingo'}
+
+            hoy = _date.today()
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                fecha_post = st.date_input("📅 Fecha del post", value=hoy, key="pq_fecha_parrilla")
+            with col_f2:
+                pilares_brand = brand.get('rrss', {}).get('pilares', [])
+                pilar_opts    = [p['label'] for p in pilares_brand] if pilares_brand else ['General']
+                pilar_sel     = st.selectbox("Pilar", pilar_opts, key="pq_pilar_parrilla")
+
+            col_f3, col_f4 = st.columns(2)
+            with col_f3:
+                formatos_brand = brand.get('rrss', {}).get('formatos', ['Post', 'Carrusel', 'Video', 'Historia'])
+                formato_sel    = st.selectbox("Formato", formatos_brand, key="pq_formato_parrilla")
+            with col_f4:
+                estado_sel = st.selectbox("Estado", ['Borrador', 'Programado', 'En revisión'],
+                                          key="pq_estado_parrilla")
+
+            if st.button("✅  Agregar a Parrilla", type="primary",
+                         use_container_width=True, key="btn_pq_add_parrilla"):
+                sections   = _parse_post_sections(saved['text'], saved.get('redes', ''))
+                dia_semana = _DIAS_ES[fecha_post.weekday()]
+                año_p, mes_p = fecha_post.year, fecha_post.month
+                marca_db   = 'Kabat One' if marca_key == 'k1' else 'SYM'
+
+                post_row = {
+                    'fecha':           str(fecha_post),
+                    'dia_semana':      dia_semana,
+                    'tipo_dia':        'regular',
+                    'pilar':           pilar_sel,
+                    'formato':         formato_sel,
+                    'tema':            saved.get('tema', ''),
+                    'copy_linkedin':   sections['copy_linkedin'],
+                    'copy_facebook':   sections['copy_facebook'],
+                    'arte_sugerencia': sections['arte_sugerencia'],
+                    'hashtags':        sections['hashtags'],
+                    'cta':             sections['cta'],
+                    'estado':          estado_sel,
+                }
+                save_parrilla_posts(marca_db, año_p, mes_p, [post_row])
+
+                if _sync.github_configured():
+                    with st.spinner("Sincronizando con GitHub…"):
+                        _sync.push()
+
+                st.success(
+                    f"✅ Post agregado a la parrilla de **{_MESES_ES[mes_p]} {año_p}** "
+                    f"({dia_semana} {str(fecha_post)}). "
+                    "Ve a **📅 Parrilla de Contenido** para verlo y enviarlo a creación de imágenes."
+                )
