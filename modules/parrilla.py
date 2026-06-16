@@ -2335,7 +2335,10 @@ def _monday_fetch_parrilla(api_key, board_id, marca, año, mes):
 
 
 def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
-    """Creates Monday.com items for each post in df. Returns result dict."""
+    """Sync parrilla with Monday.com.
+    - Items with a stored monday_item_id → UPDATE all columns (no duplicates).
+    - Items without ID → CREATE new item.
+    Returns result dict."""
     from database import get_parrilla_posts, update_monday_item_ids
 
     # Load existing Monday IDs from DB
@@ -2343,6 +2346,7 @@ def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
     existing_ids = {
         (p['fecha'], p.get('tipo_dia', 'regular')): p.get('monday_item_id')
         for p in db_posts
+        if p.get('monday_item_id')
     }
 
     board_name, columns, groups = _monday_get_board_info(api_key, board_id)
@@ -2352,7 +2356,6 @@ def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
     if not group_id:
         raise ValueError(f"No se pudo encontrar o crear el grupo para '{marca}' en Monday.")
 
-    # Field-to-post-key mapping
     _FIELD_MAP = {
         'fecha':           'fecha',
         'estado':          'estado',
@@ -2365,55 +2368,81 @@ def _monday_sync_parrilla(df, marca, año, mes, api_key, board_id):
         'cta':             'cta',
     }
 
-    posts      = _df_to_posts(df)
-    results    = []
-    new_ids    = []
-    skipped    = 0
+    _UPDATE_MUT = """mutation ($boardId: ID!, $itemId: ID!, $colVals: JSON!) {
+      change_multiple_column_values(board_id: $boardId, item_id: $itemId, column_values: $colVals) {
+        id
+      }
+    }"""
+
+    posts   = _df_to_posts(df)
+    results = []
+    new_ids = []
+    created = 0
+    updated = 0
+    errors  = 0
 
     for p in posts:
         fecha    = p.get('fecha', '')
         tipo_dia = p.get('tipo_dia', 'regular')
         key      = (fecha, tipo_dia)
 
-        if existing_ids.get(key):
-            skipped += 1
-            results.append({'fecha': fecha, 'tipo_dia': tipo_dia,
-                            'item_id': existing_ids[key], 'new': False})
-            continue
-
-        tema      = p.get('tema', '')
-        date_part = fecha[-5:].replace('-', '/') if fecha else ''
-        item_name = f"{date_part} — {tema[:50]}"
-
-        # Build column values from all matched columns
+        # Build column values dict (shared by create and update)
         col_vals = {}
         for field, col_info in col_map.items():
             post_key = _FIELD_MAP.get(field)
             if not post_key:
                 continue
-            raw_val  = p.get(post_key, '')
+            raw_val = p.get(post_key, '')
             if not raw_val:
                 continue
             formatted = _monday_col_value(field, raw_val, col_info['type'])
             if formatted is not None:
                 col_vals[col_info['id']] = formatted
-
         col_vals_json = json.dumps(col_vals, ensure_ascii=False) if col_vals else "{}"
-        item_id = _monday_create_item(api_key, board_id, item_name, col_vals_json, group_id)
+
+        item_id = existing_ids.get(key)
 
         if item_id:
-            _monday_add_update(api_key, item_id, _monday_format_update(p))
-            new_ids.append((str(item_id), marca, año, mes, fecha, tipo_dia))
-            results.append({'fecha': fecha, 'tipo_dia': tipo_dia,
-                            'item_id': str(item_id), 'new': True})
+            # ── UPDATE existing item ──────────────────────────────────────────
+            try:
+                _monday_request(api_key, _UPDATE_MUT, {
+                    "boardId": str(board_id),
+                    "itemId":  str(item_id),
+                    "colVals": col_vals_json,
+                })
+                updated += 1
+                results.append({'fecha': fecha, 'tipo_dia': tipo_dia,
+                                'item_id': str(item_id), 'new': False, 'ok': True})
+            except Exception as _ue:
+                errors += 1
+                results.append({'fecha': fecha, 'tipo_dia': tipo_dia,
+                                'item_id': str(item_id), 'new': False, 'ok': False,
+                                'error': str(_ue)})
+        else:
+            # ── CREATE new item ───────────────────────────────────────────────
+            tema      = p.get('tema', '')
+            date_part = fecha[-5:].replace('-', '/') if fecha else ''
+            item_name = f"{date_part} — {tema[:50]}"
+            new_item_id = _monday_create_item(api_key, board_id, item_name, col_vals_json, group_id)
+            if new_item_id:
+                _monday_add_update(api_key, new_item_id, _monday_format_update(p))
+                new_ids.append((str(new_item_id), marca, año, mes, fecha, tipo_dia))
+                created += 1
+                results.append({'fecha': fecha, 'tipo_dia': tipo_dia,
+                                'item_id': str(new_item_id), 'new': True, 'ok': True})
+            else:
+                errors += 1
+                results.append({'fecha': fecha, 'tipo_dia': tipo_dia,
+                                'item_id': None, 'new': True, 'ok': False})
 
     if new_ids:
         update_monday_item_ids(new_ids)
 
     return {
         'board_name': board_name,
-        'created':    len(new_ids),
-        'skipped':    skipped,
+        'created':    created,
+        'updated':    updated,
+        'errors':     errors,
         'results':    results,
     }
 
@@ -3568,7 +3597,7 @@ def show_parrilla():
                 if st.button("🔄  Sincronizar parrilla con Monday.com",
                              type="primary", use_container_width=True,
                              key="btn_monday_sync"):
-                    with st.spinner("Creando ítems en Monday.com…"):
+                    with st.spinner("Sincronizando con Monday.com…"):
                         try:
                             result = _monday_sync_parrilla(
                                 st.session_state['parrilla_df'],
@@ -3581,17 +3610,27 @@ def show_parrilla():
             # Show results
             if sync_key in st.session_state:
                 res = st.session_state[sync_key]
-                c1, c2 = st.columns(2)
+                c1, c2, c3 = st.columns(3)
                 with c1:
-                    st.metric("✅ Ítems creados", res.get('created', 0))
+                    st.metric("🆕 Ítems creados", res.get('created', 0))
                 with c2:
-                    st.metric("⏭️ Ya sincronizados", res.get('skipped', 0))
+                    st.metric("✏️ Ítems actualizados", res.get('updated', 0))
+                with c3:
+                    st.metric("❌ Errores", res.get('errors', 0))
+                if res.get('errors', 0):
+                    st.warning("Algunos ítems no pudieron sincronizarse. "
+                               "Revisa que el tablero de Monday esté accesible.")
 
                 items = res.get('results', [])
                 if items:
                     st.markdown("**Ítems en Monday.com:**")
                     for item in items:
-                        prefix = "🆕" if item.get('new') else "✅"
+                        if not item.get('ok', True):
+                            prefix = "❌"
+                        elif item.get('new'):
+                            prefix = "🆕"
+                        else:
+                            prefix = "✏️"
                         item_id = item.get('item_id', '')
                         link = f"https://monday.com/boards/{board_id}/pulses/{item_id}"
                         st.markdown(
