@@ -385,6 +385,15 @@ def update_monday_item_ids(updates):
         )
 
 
+def delete_parrilla_post(marca, año, mes, fecha, tipo_dia='regular'):
+    """Elimina un post específico de la parrilla."""
+    with _conn() as con:
+        con.execute(
+            "DELETE FROM parrilla_posts WHERE marca=? AND año=? AND mes=? AND fecha=? AND tipo_dia=?",
+            (marca, año, mes, fecha, tipo_dia),
+        )
+
+
 def clear_monday_item_ids(marca, año, mes):
     """Wipes all monday_item_id for a given month so the board can be re-synced from scratch."""
     with _conn() as con:
