@@ -51,10 +51,10 @@ _RED_DISPLAY = {
 
 # Metrics to show per network on the KPI cards (label, possible metric keys)
 _KPI_METRICS = [
-    ("Seguidores", ["seguidores", "followers", "page_fans", "connections"]),
-    ("Publicaciones", ["publicaciones", "posts", "total_posts"]),
-    ("Engagement", ["engagement_rate", "tasa_interaccion", "engagement"]),
-    ("Alcance", ["alcance", "reach", "impresiones", "impressions"]),
+    ("Seguidores",    ["incremento_seguidores", "seguidores", "followers", "page_fans", "connections"]),
+    ("Publicaciones", ["publicaciones", "posts", "total_posts", "visitas"]),
+    ("Engagement",    ["interaccion", "tasa_interaccion", "engagement_rate", "engagement", "reacciones"]),
+    ("Alcance",       ["alcance", "visualizaciones", "impresiones", "reach", "impressions"]),
 ]
 
 
@@ -107,24 +107,32 @@ def _find_metric(metricas: dict, candidates: list) -> float | None:
 
 def _get_report_data(marca: str, marca_key: str, año: int, mes: int) -> dict:
     """Gather all data needed for the report. Returns a structured dict."""
-    redes = get_redes_con_datos(marca)
+    redes_raw = get_redes_con_datos(marca)
 
-    networks_data = {}
-    for red in redes:
-        metricas = get_metricas_mensuales(marca, red, año, mes)
-        historico_df = get_metricas_historico_mensual(marca, red)
-        objetivos = get_kpi_objetivos(marca, red, año, mes)
-        networks_data[red] = {
-            "metricas": metricas,
-            "historico": historico_df,
-            "objetivos": objetivos,
-        }
+    # Merge Facebook + Instagram into one "Facebook / Instagram" group
+    merged: dict = {}
+    for red in redes_raw:
+        display = _RED_DISPLAY.get(red, red)
+        metricas   = get_metricas_mensuales(marca, red, año, mes)
+        historico  = get_metricas_historico_mensual(marca, red)
+        objetivos  = get_kpi_objetivos(marca, red, año, mes)
+        if display not in merged:
+            merged[display] = {"metricas": {}, "historico": historico, "objetivos": objetivos, "redes_raw": []}
+        # Merge metrics (sum numeric values)
+        for k, v in metricas.items():
+            merged[display]["metricas"][k] = merged[display]["metricas"].get(k, 0) + (v or 0)
+        merged[display]["redes_raw"].append(red)
+        # Keep the richer historico (more rows)
+        if historico is not None and not historico.empty:
+            prev = merged[display]["historico"]
+            if prev is None or prev.empty or len(historico) > len(prev):
+                merged[display]["historico"] = historico
 
     parrilla = get_parrilla_posts(marca, año, mes)
 
     return {
-        "redes": redes,
-        "networks": networks_data,
+        "redes": list(merged.keys()),
+        "networks": merged,
         "parrilla": parrilla,
     }
 
