@@ -17,9 +17,10 @@ def show_readme():
 
     st.markdown("""
 > **Contenido de esta guía:**
-> [¿Qué es esta plataforma?](#1) · [Navegación y filtros](#2) · [Importar datos](#3) ·
-> [Monitor de KPIs](#4) · [Dashboard](#5) · [Analista de Contenido](#6) ·
-> [Insights con IA](#7) · [Parrilla de Contenido](#8) · [Nomenclatura de archivos](#9) · [Métricas especiales](#10)
+> [1 · ¿Qué es?](#1) · [2 · Navegación](#2) · [3 · Importar Datos](#3) ·
+> [4 · Monitor de KPIs](#4) · [5 · Dashboard](#5) · [6 · Analista de Contenido](#6) ·
+> [7 · Insights con IA](#7) · [8 · Parrilla de Contenido](#8) · [9 · Post Rápido](#9) ·
+> [10 · Editor de Imágenes](#10) · [11 · Nomenclatura](#11) · [12 · Métricas especiales](#12)
     """)
 
     st.markdown("---")
@@ -40,12 +41,16 @@ históricas y generar contenido mensual asistido por inteligencia artificial.
 - Ver el cumplimiento de KPIs con indicadores visuales
 - Comparar el rendimiento mes a mes con gráficas históricas
 - Analizar el desempeño de publicaciones individuales
-- **Generar análisis estratégico con Claude directamente en la plataforma**
+- Generar análisis estratégico con Claude o Gemini directamente en la plataforma
 - **Crear la parrilla de contenido mensual con IA**, basada en los datos reales de rendimiento
+- **Generar imágenes y artes para redes sociales** con editor integrado
+- **Publicar posts rápidos** sin esperar a la parrilla mensual
 
 **Marcas disponibles:** Kabat One (`k1_`) · SYM (`sym_`)
 
 **Redes sociales:** LinkedIn · Facebook · Instagram
+
+**Motor de IA disponibles:** Gemini 2.5 Flash (gratis) · Claude (requiere API key)
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -61,7 +66,8 @@ históricas y generar contenido mensual asistido por inteligencia artificial.
 | **Kabat One / SYM** | Cambia entre marcas; los filtros se reinician al cambiar |
 | **Módulos** | Navegación principal entre secciones |
 | **☀️ / 🌙 Modo** | Alterna entre tema claro y tema oscuro |
-| **👤 Usuario** | Muestra tu nombre y rol |
+| **Motor IA** | Indica qué motor IA está activo (Gemini gratis / Claude) |
+| **👤 Usuario** | Muestra tu nombre, rol y versión del commit activo |
 | **🚪 Cerrar sesión** | Cierra la sesión actual |
 
 ---
@@ -266,25 +272,18 @@ en marcas B2G del sector seguridad pública.
 
 ## Flujo de trabajo recomendado
 
-Sigue estos pasos en orden para obtener la parrilla más estratégica posible:
-
 ```
 PASO 1 — Cierre del mes anterior
   📁 Importar Datos
      └─ Sube los exports de LinkedIn, Facebook e Instagram del mes cerrado
-        para las 2 marcas (Kabat One y SYM)
 
 PASO 2 — Registrar KPIs
   🎯 Monitor de KPIs
      └─ Captura metas y valores reales del mes cerrado
-        (especialmente las métricas manuales: alcance Instagram,
-         visualizaciones de seguidores Facebook)
 
 PASO 3 — Análisis con IA  ← CRÍTICO para la parrilla
   🤖 Insights para IA
-     └─ Selecciona la marca (Kabat One o SYM)
      └─ Repite para las 3 redes: LinkedIn → Facebook → Instagram
-     └─ Clic en "Analizar con Claude" en cada una
      └─ Estos análisis quedan guardados y la Parrilla los usará
 
 PASO 4 — Generar Parrilla
@@ -293,7 +292,7 @@ PASO 4 — Generar Parrilla
      └─ Investiga fechas especiales
      └─ Elige el objetivo del mes
      └─ Genera la parrilla
-     └─ Ajusta con el cuadro de diálogo si necesitas
+     └─ Edita con el cuadro de ajustes si necesitas
      └─ Descarga el Excel para el equipo de diseño
 ```
 
@@ -308,124 +307,262 @@ PASO 4 — Generar Parrilla
 
 Cada día de publicación genera **una sola pieza de contenido** adaptada a las 3 redes:
 - **LinkedIn** → copy formal, lenguaje de autoridad y liderazgo, 2-3 párrafos
-- **Facebook** → copy conversacional, tono cercano, 1-2 párrafos
-- **Instagram** → **idéntico a Facebook** (espejo 100%)
+- **Facebook / Instagram** → copy conversacional, tono cercano, 1-2 párrafos
 
-Las **fechas especiales** (efemérides, días mundiales) se agregan como publicaciones
-**extra** en esa fecha específica — no reemplazan los días regulares.
+Las **fechas especiales** se agregan como publicaciones **extra** en esa fecha —
+no reemplazan los días regulares.
 
 ---
 
 ## Secciones de la Parrilla
 
+### Tab Parrilla — Tabla compacta
+La tabla muestra 7 columnas clave (Fecha, Día, Tipo, Tema, Pilar, Formato, Estado)
+sin scroll horizontal. Usa los **checkboxes** para seleccionar posts y el botón
+**🗑️ Eliminar marcados** para borrarlos (requiere confirmación explícita).
+
+### Cards de contenido por post
+Debajo de la tabla aparece una card colapsada por cada post. Al expandirla ves y editas:
+
+| Campo | Contenido |
+|---|---|
+| **Tema** | Título conciso del post |
+| **CTA** | Llamado a la acción |
+| **Copy LinkedIn** | Texto completo para LinkedIn |
+| **Copy Facebook / Instagram** | Texto completo para Facebook e Instagram |
+| **✏️ Texto en Imagen** | Headline, subtítulo, texto de slides o datos de infografía — el copy que va DENTRO del arte |
+| **Hashtags** | Set de 5-7 hashtags |
+| **Arte Sugerida** | Descripción detallada para el diseñador |
+
+Haz clic en **💾 Actualizar este post** para guardar los cambios del card.
+Luego presiona **💾 Guardar cambios** (botón principal) para persistir en la base de datos.
+
+### Texto en Imagen — Completar con IA
+Si uno o más posts tienen el campo "Texto en Imagen" vacío, aparece el banner:
+
+> ✏️ **N post(s) sin Texto en Imagen** — haz clic para que la IA los complete
+
+La IA genera automáticamente según el formato de cada post:
+- **Carrusel** → texto y arte por cada slide
+- **Infografía** → título + puntos de dato clave
+- **Video / Reel** → hook de apertura + frases en pantalla
+- **Imagen estática** → Headline + subtítulo
+
+### 🎠 Configuración de Carrusel
+Cuando el formato del post es **Carrusel**, aparece una sección adicional al final del card:
+
+1. **Número de slides** — define cuántos slides tendrá el carrusel (1-15, portada incluida)
+2. **✨ Generar texto para N slide(s)** — la IA genera para cada slide:
+   - `Slide N: [título o texto breve]`
+   - `Arte N: [descripción visual del arte de ese slide]`
+
+El texto generado reemplaza el campo "Texto en Imagen" y se guarda automáticamente.
+
 ### 📆 Fechas Especiales del Mes
-Clic en **🔍 Investigar fechas del mes** para que Claude busque automáticamente:
-- Fechas nacionales mexicanas relevantes para el sector seguridad
-- Días internacionales adaptables a un mensaje de seguridad
+Clic en **🔍 Investigar fechas del mes** para que Claude busque:
+- Fechas nacionales mexicanas relevantes para seguridad pública
+- Días internacionales adaptables al sector
 - Efemérides tecnológicas o de innovación gubernamental
 
 Aparece un **calendario visual** con:
 - 🔵 Días azules = publicaciones regulares
-- 🟡 Días amarillos = fechas especiales encontradas
+- 🟡 Días amarillos = fechas especiales
 
-Selecciona con los **checkboxes** cuáles incluir como publicaciones extra.
-Puedes deseleccionar cualquier fecha que no quieras incluir.
-
----
-
-### 🎯 Objetivo del Mes
-Elige entre 6 opciones predefinidas o escribe uno personalizado:
-
-| Opción | Cuándo usarla |
-|---|---|
-| Posicionamiento y liderazgo | Meses de consolidación de marca |
-| Generación de leads | Cuando hay campaña activa o evento próximo |
-| Educación técnica | Para audiencias nuevas o post-evento |
-| Construcción de confianza | Cuando hay casos de éxito o testimonios disponibles |
-| Presencia en evento | Mes de expo, conferencia o temporada relevante |
-| Lanzamiento de producto | Cuando hay un nuevo módulo o funcionalidad |
-| Personalizado | Objetivos específicos que no encajan en las opciones anteriores |
-
----
-
-### ✨ Generar Parrilla
-Claude recibe:
-- Brief completo de la marca (pilares, tono, hashtags, CTAs, mensajes clave)
-- Análisis de Insights del mes anterior (si fueron generados en el Paso 3)
-- Fechas especiales seleccionadas
-- Objetivo del mes
-- Días de publicación configurados
-
-El resultado es una tabla editable con una fila por pieza de contenido:
-
-| Columna | Contenido |
-|---|---|
-| Fecha | Fecha exacta de publicación |
-| Día | Día de la semana |
-| Tipo | Regular o Especial |
-| Pilar | Pilar de contenido |
-| Formato | Imagen estática, Carrusel, etc. |
-| Tema | Título conciso del post |
-| Copy LinkedIn | Texto completo para LinkedIn |
-| Copy Facebook / Instagram | Texto completo para Facebook e Instagram |
-| Arte Sugerida | Descripción detallada para el diseñador |
-| Hashtags | Set de 5-7 hashtags |
-| CTA | Llamado a la acción |
-
-Puedes **editar cualquier celda** directamente en la tabla antes de descargar.
-
----
+Selecciona con los **checkboxes** cuáles incluir.
 
 ### 💬 Cuadro de Ajustes
-Después de generar la parrilla, puedes pedirle cambios a Claude en lenguaje natural:
+Después de generar, pide cambios a Claude en lenguaje natural:
 
-**Ejemplos de ajustes:**
-> *"Los temas de posicionamiento ya los tengo cubiertos con 3 publicaciones que hice la semana pasada. Cámbiame esos posts por educación técnica."*
-
-> *"El post del lunes 7 hazlo sobre el lanzamiento del nuevo módulo de LPR que anunciamos."*
-
-> *"Quiero que el mes tenga más peso en casos de uso y menos en posicionamiento genérico."*
+> *"Los temas de posicionamiento ya los tengo cubiertos. Cámbiame esos posts por educación técnica."*
 
 > *"El copy de LinkedIn de la primera semana está muy largo, acórtalo a máximo 2 párrafos."*
 
-Claude ajusta solo lo que le pides, mantiene el resto igual y te explica brevemente qué cambió.
-El historial de ajustes queda visible para que puedas rastrear los cambios.
+Claude ajusta solo lo que le pides y explica brevemente qué cambió.
+
+### 📥 Descargar Excel
+El Excel incluye todas las columnas + **columna "Copy Instagram"** (copia exacta de Facebook),
+con formato profesional para entregar al equipo de diseño.
 
 ---
 
-### 📥 Descargar Excel
-El archivo Excel incluye:
-- Todas las columnas visibles en la tabla
-- **Columna "Copy Instagram"** generada automáticamente como copia exacta de Facebook
-- Formato profesional con encabezados, ajuste de columnas y word-wrap
+## Estados de publicación
 
-Entrega el Excel al equipo de diseño con las columnas **Arte Sugerida** para guiar la producción visual.
+| Estado | Significado |
+|---|---|
+| ⚪ Borrador | Post pendiente de revisión |
+| 🟡 En revisión | Copy enviado al cliente o equipo |
+| 🔵 Aprobado | Listo para programar |
+| 🟢 Publicado | Ya se publicó |
+| 🔴 Pausado | Detenido temporalmente |
+
+Los estados se sincronizan con **Monday.com** si está configurado.
 
 ---
 
 ## Conexión Insights → Parrilla
 
-Si generaste los análisis de Insights **antes** de crear la parrilla, la plataforma
-muestra una confirmación verde:
+Si generaste los análisis de Insights antes de crear la parrilla, la plataforma confirma:
 
-> ✅ *Insights de IA de Mayo 2026 disponibles (LinkedIn, Facebook, Instagram) — se usarán como base estratégica.*
+> ✅ *Insights de IA disponibles (LinkedIn, Facebook, Instagram) — se usarán como base estratégica.*
 
-En ese caso, Claude conoce:
-- Qué pilares tuvieron mejor engagement el mes anterior
-- Qué formatos funcionaron y cuáles no
-- Las recomendaciones de temas que ya identificó
-- Las tendencias de rendimiento por tipo de contenido
-
-Y toma decisiones editoriales basadas en datos reales, no solo en el brief.
-
-Si **no** hay análisis previo disponible, la parrilla se genera igualmente usando los
-datos históricos de la base de datos como referencia.
+Claude conoce: pilares con mejor engagement, formatos que funcionaron, temas recomendados
+y tendencias de rendimiento — y toma decisiones editoriales basadas en datos reales.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 9. NOMENCLATURA
+    # 9. POST RÁPIDO
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("9 · Nomenclatura completa de archivos"):
+    with st.expander("9 · Post Rápido — Crear y agregar posts individuales"):
+        st.markdown("""
+**Post Rápido** permite crear una publicación individual sin generar toda la parrilla del mes.
+Útil para posts de oportunidad, reacciones a noticias o contenido urgente.
+
+### ¿Cómo funciona?
+
+1. Ve a **✏️ Post Rápido** en el menú lateral
+2. Completa los campos del formulario:
+
+| Campo | Descripción |
+|---|---|
+| **Red social** | LinkedIn, Facebook, Instagram o Multi-red |
+| **Tema** | Sobre qué trata el post |
+| **Pilar** | Pillar de contenido (Posicionamiento, Educación, etc.) |
+| **Tono** | Formal / Conversacional / Inspiracional / Urgente |
+| **CTA** | Llamado a la acción deseado |
+| **Notas adicionales** | Contexto extra para la IA |
+
+3. Haz clic en **✨ Generar Post** — la IA crea el copy completo
+4. Revisa el resultado y edita si necesitas
+5. Haz clic en **📅 Agregar a Parrilla** para enviarlo a la parrilla del mes
+
+### Agregar a Parrilla
+
+Al hacer clic en **📅 Agregar a Parrilla**, aparece un formulario:
+
+| Campo | Descripción |
+|---|---|
+| **Mes / Año** | A qué mes pertenece el post |
+| **Fecha** | Día exacto de publicación |
+| **Formato** | Imagen estática, Carrusel, Video, etc. |
+| **Arte Sugerida** | Descripción para el diseñador |
+| **✏️ Texto en Imagen** | Headline o texto que irá dentro del arte |
+
+El post se agrega directamente a la parrilla del mes y aparece de inmediato sin necesidad de
+hacer refresh. Se sincroniza automáticamente con la base de datos en GitHub.
+        """)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 10. EDITOR DE IMÁGENES
+    # ══════════════════════════════════════════════════════════════════════════
+    with st.expander("10 · Editor de Imágenes — Generación y edición de artes"):
+        st.markdown("""
+La sección **Prompts de Imagen** dentro de la Parrilla de Contenido incluye un editor
+completo para generar y personalizar los artes de cada post.
+
+---
+
+## Formatos disponibles
+
+| Formato | Dimensiones | Uso |
+|---|---|---|
+| **Cuadrado 1:1** | 1080 × 1080 px | Feed Instagram / Facebook |
+| **Vertical 4:5** | 1080 × 1350 px | Feed Instagram optimizado para móvil |
+| **Horizontal 16:9** | 1920 × 1080 px | LinkedIn / portadas |
+| **Story 9:16** | 1080 × 1920 px | Stories / Reels verticales |
+
+---
+
+## Agregar Logo
+
+El botón **🖼️ Agregar logo** abre el panel de posicionamiento del logo de marca.
+
+### Posiciones disponibles (9 puntos)
+
+```
+┌─────────────────────────────┐
+│ Superior-Izq  Superior-Cen  Superior-Der │
+│                             │
+│ Centro-Izq      Centro      Centro-Der   │
+│                             │
+│ Inferior-Izq  Inferior-Cen  Inferior-Der │
+└─────────────────────────────┘
+```
+
+### Controles de logo
+
+| Control | Descripción |
+|---|---|
+| **Tamaño (%)** | Qué porcentaje del ancho de la imagen ocupa el logo |
+| **Variante** | Blanco / Color / Negro |
+| **Logo personalizado** | Sube tu propio archivo PNG |
+| **← Horizontal →** | Desplazamiento fino horizontal (±30% del ancho) |
+| **↑ Vertical ↓** | Desplazamiento fino vertical (±30% del alto) |
+
+---
+
+## Agregar Pleca
+
+El botón **🎨 Agregar pleca** abre el panel de bandas de color de marca.
+
+### ¿Qué es una pleca?
+
+Una pleca es una banda de color (generalmente del color de la marca) que:
+- Enmarca visualmente la imagen
+- Sirve de fondo para texto o logos
+- Refuerza la identidad de la marca
+
+### Posiciones de pleca
+
+| Opción | Descripción |
+|---|---|
+| ⬇ Inferior | Banda horizontal en la parte de abajo |
+| ⬆ Superior | Banda horizontal en la parte de arriba |
+| ↔ Centro horizontal | Banda horizontal al centro |
+| ⬅ Izquierda | Banda vertical al lado izquierdo |
+| ➡ Derecha | Banda vertical al lado derecho |
+| ↕ Centro vertical | Banda vertical al centro |
+
+### Controles de pleca
+
+| Control | Descripción |
+|---|---|
+| **Color de marca** | Selector de colores predefinidos de la marca (primario, secundario, acento…) |
+| **O elige color libre** | Color picker para cualquier tono |
+| **Grosor (%)** | Qué porcentaje de la imagen ocupa la pleca (2-35%) |
+| **Opacidad (%)** | Transparencia de la pleca (20-100%) |
+| **☑ Sombra paralela** | Agrega una sombra difuminada en el borde interior de la pleca |
+| **Intensidad sombra (%)** | Qué tan oscura y visible es la sombra (10-100%) |
+
+### Vista previa en tiempo real
+
+Cada vez que cambias un control, la imagen se actualiza en tiempo real (vista previa).
+Haz clic en **✅ Aplicar pleca** para guardar el resultado.
+
+---
+
+## Edición con IA
+
+Además de logo y pleca, el editor permite instrucciones en lenguaje natural:
+
+> *"Aumenta el contraste"*
+> *"Cambia el fondo a azul oscuro"*
+> *"Agrega un filtro cálido"*
+
+La IA (Gemini) aplica los cambios y muestra el resultado. Puedes deshacer y rehacer
+en el historial de ediciones.
+
+---
+
+## Generación de imagen
+
+Desde el tab **Prompts de Imagen**, puedes generar una imagen desde cero describiendo lo que quieres.
+La IA genera la imagen base que luego puedes editar con logo, pleca y ajustes.
+        """)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 11. NOMENCLATURA
+    # ══════════════════════════════════════════════════════════════════════════
+    with st.expander("11 · Nomenclatura completa de archivos"):
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("""
@@ -490,9 +627,9 @@ sym_contenido_instagram.xlsx
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 10. MÉTRICAS ESPECIALES
+    # 12. MÉTRICAS ESPECIALES
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("10 · Métricas especiales y casos particulares"):
+    with st.expander("12 · Métricas especiales y casos particulares"):
         st.markdown("""
 ### Reacciones — LinkedIn (`auto_4pct`)
 La meta de Reacciones en LinkedIn **no se configura manualmente**. Se calcula
@@ -531,7 +668,7 @@ Si Meta te entrega un `.csv`, conviértelo antes de subir:
     st.markdown("---")
     st.markdown(
         "<div style='color:#5b8db8;font-size:.75rem;text-align:center;'>"
-        "RRSS Analytics · Kabat One &amp; SYM · v2.0 — IA integrada con Claude Opus"
+        "RRSS Analytics · Kabat One &amp; SYM · v2.1 — IA integrada con Claude + Gemini"
         "</div>",
         unsafe_allow_html=True,
     )

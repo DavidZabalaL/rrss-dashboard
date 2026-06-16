@@ -487,9 +487,10 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     return None
 
 
-def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85):
+def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85,
+                     shadow=False, shadow_intensity=60):
     """Dibuja una pleca de color sobre la imagen. Retorna PNG bytes."""
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageFilter
 
     def _hex_to_rgb(h):
         h = h.lstrip('#')
@@ -523,6 +524,32 @@ def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85
             cx = bw // 2
             rect = (cx - thick // 2, 0, cx + thick // 2, bh)
         draw.rectangle(rect, fill=(r, g, b, alpha))
+
+    # Sombra paralela: banda oscura difuminada en el borde interior de la pleca
+    if shadow:
+        shadow_layer = Image.new('RGBA', (bw, bh), (0, 0, 0, 0))
+        sdraw = ImageDraw.Draw(shadow_layer)
+        salpha = int(shadow_intensity / 100 * 200)
+        soff   = max(6, thick // 3)
+
+        if position == 'inferior':
+            srect = (0, bh - thick - soff, bw, bh - thick + soff // 2)
+        elif position == 'superior':
+            srect = (0, thick - soff // 2, bw, thick + soff)
+        elif position == 'centro-h':
+            cy = bh // 2; half = thick // 2
+            srect = (0, cy - half - soff, bw, cy + half + soff)
+        elif position == 'izquierda':
+            srect = (thick - soff // 2, 0, thick + soff, bh)
+        elif position == 'derecha':
+            srect = (bw - thick - soff, 0, bw - thick + soff // 2, bh)
+        else:  # centro-v
+            cx = bw // 2; half = thick // 2
+            srect = (cx - half - soff, 0, cx + half + soff, bh)
+
+        sdraw.rectangle(srect, fill=(0, 0, 0, salpha))
+        shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=soff))
+        base = Image.alpha_composite(base, shadow_layer)
 
     combined = Image.alpha_composite(base, overlay)
     out = io.BytesIO()
@@ -619,13 +646,30 @@ def _pleca_ui(key_prefix, img_bytes, brand):
             key=f"_pleca_op_{key_prefix}",
         )
 
+    # Sombra paralela
+    _sh1, _sh2 = st.columns([1, 3])
+    with _sh1:
+        _use_shadow = st.checkbox(
+            "Sombra paralela",
+            value=False,
+            key=f"_pleca_sh_{key_prefix}",
+        )
+    with _sh2:
+        _shadow_int = st.slider(
+            "Intensidad sombra (%)",
+            min_value=10, max_value=100, value=60, step=5,
+            key=f"_pleca_shi_{key_prefix}",
+            disabled=not _use_shadow,
+        ) if _use_shadow else 60
+
     _pos_val  = _pleca_pos_opts[_sel_pos]
     _thick_f  = _thick_pct / 100
     _opac_f   = _opacity   / 100
 
     # Live preview
     try:
-        _preview = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f)
+        _preview = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
+                                    shadow=_use_shadow, shadow_intensity=_shadow_int)
         st.caption("Vista previa:")
         st.image(_preview, use_container_width=True)
     except Exception:
@@ -634,7 +678,8 @@ def _pleca_ui(key_prefix, img_bytes, brand):
     if st.button("✅ Aplicar pleca", key=f"_pleca_apply_{key_prefix}",
                  type="primary", use_container_width=True):
         try:
-            _result = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f)
+            _result = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
+                                       shadow=_use_shadow, shadow_intensity=_shadow_int)
             st.session_state[_panel_key] = False
             return _result
         except Exception as _pe:
