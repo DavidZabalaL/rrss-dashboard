@@ -90,6 +90,7 @@ def init_db():
             tema            TEXT,
             copy_linkedin   TEXT,
             copy_facebook   TEXT,
+            copy_imagen     TEXT,
             arte_sugerencia TEXT,
             hashtags        TEXT,
             cta             TEXT,
@@ -98,6 +99,11 @@ def init_db():
             UNIQUE(marca, año, mes, fecha, tipo_dia)
         );
         """)
+        # Migración: agregar copy_imagen si la tabla ya existe sin esa columna
+        try:
+            con.execute("ALTER TABLE parrilla_posts ADD COLUMN copy_imagen TEXT")
+        except Exception:
+            pass  # La columna ya existe
 
 
 # ── Métricas diarias ──────────────────────────────────────────────────────────
@@ -341,8 +347,8 @@ def save_parrilla_posts(marca, año, mes, posts):
             con.execute("""
             INSERT INTO parrilla_posts
             (marca, año, mes, fecha, dia_semana, tipo_dia, pilar, formato, tema,
-             copy_linkedin, copy_facebook, arte_sugerencia, hashtags, cta, estado)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             copy_linkedin, copy_facebook, copy_imagen, arte_sugerencia, hashtags, cta, estado)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(marca, año, mes, fecha, tipo_dia) DO UPDATE SET
               dia_semana=excluded.dia_semana,
               pilar=excluded.pilar,
@@ -350,6 +356,7 @@ def save_parrilla_posts(marca, año, mes, posts):
               tema=excluded.tema,
               copy_linkedin=excluded.copy_linkedin,
               copy_facebook=excluded.copy_facebook,
+              copy_imagen=excluded.copy_imagen,
               arte_sugerencia=excluded.arte_sugerencia,
               hashtags=excluded.hashtags,
               cta=excluded.cta,
@@ -359,6 +366,7 @@ def save_parrilla_posts(marca, año, mes, posts):
                 p.get('fecha'), p.get('dia_semana'), p.get('tipo_dia', 'regular'),
                 p.get('pilar'), p.get('formato'), p.get('tema'),
                 p.get('copy_linkedin'), p.get('copy_facebook'),
+                p.get('copy_imagen'),
                 p.get('arte_sugerencia'), p.get('hashtags'), p.get('cta'),
                 p.get('estado', 'Borrador'),
             ))

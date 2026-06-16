@@ -1645,6 +1645,7 @@ _COL_MAP = {
     'tema':            'Tema',
     'copy_linkedin':   'Copy LinkedIn',
     'copy_facebook':   'Copy Facebook / Instagram',
+    'copy_imagen':     'Texto en Imagen',
     'arte_sugerencia': 'Arte Sugerida',
     'hashtags':        'Hashtags',
     'cta':             'CTA',
@@ -1685,6 +1686,7 @@ def _posts_from_db(db_posts):
         'tema':            p.get('tema', ''),
         'copy_linkedin':   p.get('copy_linkedin', ''),
         'copy_facebook':   p.get('copy_facebook', ''),
+        'copy_imagen':     p.get('copy_imagen', ''),
         'arte_sugerencia': p.get('arte_sugerencia', ''),
         'hashtags':        p.get('hashtags', ''),
         'cta':             p.get('cta', ''),
@@ -2867,6 +2869,14 @@ def show_parrilla():
                         value=str(_prow.get('Copy Facebook / Instagram', '') or ''),
                         height=200, key=f"c_fb_{_pi}", disabled=_is_visita,
                     )
+                    _cv_img = st.text_area(
+                        "✏️ Texto en Imagen",
+                        value=str(_prow.get('Texto en Imagen', '') or ''),
+                        height=130,
+                        key=f"c_img_{_pi}",
+                        disabled=_is_visita,
+                        help="Headline, subtítulo, texto de slides, datos de infografía — el copy que va DENTRO del arte.",
+                    )
                     _cv_ht = st.text_input(
                         "Hashtags", value=str(_prow.get('Hashtags', '') or ''),
                         key=f"c_ht_{_pi}", disabled=_is_visita,
@@ -2884,6 +2894,7 @@ def show_parrilla():
                             df.at[_pi, 'CTA']                       = _cv_cta
                             df.at[_pi, 'Copy LinkedIn']             = _cv_li
                             df.at[_pi, 'Copy Facebook / Instagram'] = _cv_fb
+                            df.at[_pi, 'Texto en Imagen']           = _cv_img
                             df.at[_pi, 'Hashtags']                  = _cv_ht
                             df.at[_pi, 'Arte Sugerida']             = _cv_arte
                             edited_df = df

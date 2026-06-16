@@ -489,8 +489,22 @@ def show_post_quick():
             hashtags_val = ch.text_input("Hashtags", value=sections['hashtags'], key="pq_par_ht")
             cta_val      = cc.text_input("CTA",      value=sections['cta'],      key="pq_par_cta")
 
+            # ── Texto en imagen ───────────────────────────────────────────────
+            copy_imagen_val = st.text_area(
+                "✏️ Texto en Imagen",
+                value='',
+                height=110,
+                key="pq_par_copy_img",
+                help="Headline, subtítulo, texto de slides o datos de infografía — el copy que va DENTRO del arte (diferente al copy de la publicación).",
+                placeholder=(
+                    "Ej. para carrusel:\nSlide 1: '3 razones para elegir Kabat One'\n"
+                    "Slide 2: 'Integración total'\nSlide 3: 'IA en tiempo real'\n\n"
+                    "Ej. para imagen estática:\nHeadline: 'Seguridad que no descansa'"
+                ),
+            )
+
             # ── Arte sugerida ─────────────────────────────────────────────────
-            arte_val = st.text_area("Arte Sugerida (descripción para el diseñador)",
+            arte_val = st.text_area("Arte Sugerida (descripción visual para el diseñador)",
                                     value=sections['arte_sugerencia'],
                                     height=90, key="pq_par_arte")
 
@@ -506,6 +520,7 @@ def show_post_quick():
                     'tema':            tema_val,
                     'copy_linkedin':   copy_li,
                     'copy_facebook':   copy_fb,
+                    'copy_imagen':     copy_imagen_val,
                     'arte_sugerencia': arte_val,
                     'hashtags':        hashtags_val,
                     'cta':             cta_val,
