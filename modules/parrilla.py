@@ -268,7 +268,8 @@ def _ai_provider():
 
 
 def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20,
-                    logo_variant='white', custom_logo_bytes=None):
+                    logo_variant='white', custom_logo_bytes=None,
+                    offset_x_pct=0.0, offset_y_pct=0.0):
     """Overlay the brand logo on the generated image. Returns PNG bytes."""
     from PIL import Image
 
@@ -296,13 +297,17 @@ def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20,
 
     pad = int(bw * 0.03)
     if position == 'bottom-right':
-        x = bw - logo_w - pad; y = bh - logo_h - pad
+        x, y = bw - logo_w - pad, bh - logo_h - pad
     elif position == 'bottom-left':
         x, y = pad, bh - logo_h - pad
+    elif position == 'bottom-center':
+        x, y = (bw - logo_w) // 2, bh - logo_h - pad
     elif position == 'top-right':
         x, y = bw - logo_w - pad, pad
     elif position == 'top-left':
         x, y = pad, pad
+    elif position == 'top-center':
+        x, y = (bw - logo_w) // 2, pad
     elif position == 'center-left':
         x, y = pad, (bh - logo_h) // 2
     elif position == 'center-right':
@@ -311,6 +316,13 @@ def _composite_logo(img_bytes, brand, position='bottom-right', logo_pct=0.20,
         x, y = (bw - logo_w) // 2, (bh - logo_h) // 2
     else:
         x, y = pad, pad
+
+    # Apply fine-tuning offsets (% of image dimensions)
+    x += int(bw * offset_x_pct)
+    y += int(bh * offset_y_pct)
+    # Clamp to image bounds so logo is never cut off
+    x = max(0, min(bw - logo_w, x))
+    y = max(0, min(bh - logo_h, y))
 
     base_img.paste(logo_img, (x, y), logo_img)
 
@@ -388,20 +400,22 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             if st.button("🗑️", key=f"_la_rmcust_{key_prefix}", help="Quitar logo propio"):
                 st.session_state.pop(_cust_key, None)
 
-    # Position + size in two columns
+    # Position + size
     _pos_opts = {
-        '↘ Inf. derecha':     'bottom-right',
-        '↙ Inf. izquierda':   'bottom-left',
-        '↗ Sup. derecha':     'top-right',
-        '↖ Sup. izquierda':   'top-left',
-        '⬅ Centro izquierda': 'center-left',
-        '➡ Centro derecha':   'center-right',
-        '🔲 Centro':           'center',
+        '↘ Inf. derecha':      'bottom-right',
+        '↙ Inf. izquierda':    'bottom-left',
+        '⬇ Inf. centro':       'bottom-center',
+        '↗ Sup. derecha':      'top-right',
+        '↖ Sup. izquierda':    'top-left',
+        '⬆ Sup. centro':       'top-center',
+        '⬅ Centro izquierda':  'center-left',
+        '➡ Centro derecha':    'center-right',
+        '🔲 Centro':            'center',
     }
     _col_pos, _col_sz = st.columns([3, 2])
     with _col_pos:
         _sel_pos = st.selectbox(
-            "Posición",
+            "Posición base",
             list(_pos_opts.keys()),
             key=f"_la_pos_sel_{key_prefix}",
         )
@@ -412,13 +426,33 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             key=f"_la_pct_sl_{key_prefix}",
         )
 
-    # Live preview — updates automatically on every control change
+    # Fine-tuning offset sliders
+    st.caption("Ajuste fino de margen (mueve el logo desde la posición base):")
+    _off_c1, _off_c2 = st.columns(2)
+    with _off_c1:
+        _off_x = st.slider(
+            "← Horizontal →", min_value=-30, max_value=30,
+            value=0, step=1,
+            key=f"_la_offx_{key_prefix}",
+            help="Negativo = izquierda · Positivo = derecha",
+        )
+    with _off_c2:
+        _off_y = st.slider(
+            "↑ Vertical ↓", min_value=-30, max_value=30,
+            value=0, step=1,
+            key=f"_la_offy_{key_prefix}",
+            help="Negativo = arriba · Positivo = abajo",
+        )
+
+    # Live preview
     _prev_var  = st.session_state.get(f"_la_var_{key_prefix}", _avail_vars[0] if _avail_vars else 'white')
     if _has_custom:
         _prev_var = 'white'
-    _prev_pos  = _pos_opts.get(_sel_pos, 'bottom-right')
-    _prev_pct  = _pct_val / 100
-    _prev_cust = st.session_state.get(_cust_key) if _has_custom else None
+    _prev_pos    = _pos_opts.get(_sel_pos, 'bottom-right')
+    _prev_pct    = _pct_val / 100
+    _prev_cust   = st.session_state.get(_cust_key) if _has_custom else None
+    _prev_off_x  = _off_x / 100
+    _prev_off_y  = _off_y / 100
     try:
         _preview_bytes = _composite_logo(
             img_bytes, brand,
@@ -426,6 +460,8 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
             logo_pct=_prev_pct,
             logo_variant=_prev_var,
             custom_logo_bytes=_prev_cust,
+            offset_x_pct=_prev_off_x,
+            offset_y_pct=_prev_off_y,
         )
         st.caption("Vista previa:")
         st.image(_preview_bytes, use_container_width=True)
@@ -440,6 +476,8 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
                 logo_pct=_prev_pct,
                 logo_variant=_prev_var,
                 custom_logo_bytes=_prev_cust,
+                offset_x_pct=_prev_off_x,
+                offset_y_pct=_prev_off_y,
             )
             st.session_state[_panel_key] = False
             return _result
