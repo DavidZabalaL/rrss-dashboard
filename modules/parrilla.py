@@ -851,7 +851,12 @@ def _generate_imagen(prompt_text, aspect_ratio='16:9', quality='standard'):
         url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
                f'nano-banana-pro-preview:generateContent?key={key}')
         # Add aspect hint to the prompt
-        aspect_hint = 'wide landscape format' if aspect_ratio == '16:9' else 'square format'
+        if aspect_ratio == '16:9':
+            aspect_hint = 'wide landscape format, 16:9 ratio'
+        elif aspect_ratio == '4:5':
+            aspect_hint = 'vertical portrait format, 4:5 ratio, taller than wide, Instagram portrait'
+        else:
+            aspect_hint = 'square format, 1:1 ratio'
         body = json.dumps({
             'contents': [{'parts': [{'text': f'{_prompt}, {aspect_hint}'}]}],
             'generationConfig': {'responseModalities': ['IMAGE']},
@@ -1360,10 +1365,12 @@ def _build_image_prompt_request(row, brand, red_formato, style='libre'):
 
     if 'LinkedIn' in red_formato:
         aspect = '1200×628 px (horizontal, landscape) — aspect ratio 16:9'
+    elif '4:5' in red_formato or '1080×1350' in red_formato:
+        aspect = '1080×1350 px (vertical portrait) — aspect ratio 4:5'
     elif 'Instagram' in red_formato or 'Facebook' in red_formato:
         aspect = '1080×1080 px (cuadrado) — aspect ratio 1:1'
     else:
-        aspect = '1200×628 px (LinkedIn, 16:9) y 1080×1080 px (Instagram/Facebook, 1:1)'
+        aspect = '1200×628 px (LinkedIn, 16:9), 1080×1080 px (cuadrado 1:1) y 1080×1350 px (vertical 4:5)'
 
     color_section = ''
     if primary:
@@ -3785,23 +3792,36 @@ def show_parrilla():
                         _prompt_gen = f"{_scene_desc}\n\n{_master}" if _master else _scene_desc
                         _img4_cache = f"img4_{cache_key}"
 
-                        # Aspect ratio selector si es "Ambos"
+                        # Aspect ratio selector
                         if 'LinkedIn' in red_img:
                             _aspect4 = '16:9'
                             _aspect_lbl = 'LinkedIn 16:9'
                         elif 'Instagram' in red_img or 'Facebook' in red_img:
-                            _aspect4 = '1:1'
-                            _aspect_lbl = 'Instagram/Facebook 1:1'
+                            _col_asp, _ = st.columns([2, 3])
+                            with _col_asp:
+                                _asp_sel_ig = st.radio(
+                                    "Formato",
+                                    ["Cuadrado (1:1 · 1080×1080)", "Vertical (4:5 · 1080×1350)"],
+                                    horizontal=True,
+                                    key="img4_aspect_ig",
+                                )
+                            _aspect4    = '4:5' if '4:5' in _asp_sel_ig else '1:1'
+                            _aspect_lbl = _asp_sel_ig
                         else:
                             _col_asp, _ = st.columns([2, 3])
                             with _col_asp:
                                 _asp_sel = st.radio(
                                     "Formato a generar",
-                                    ["LinkedIn (16:9)", "Instagram (1:1)"],
+                                    ["LinkedIn (16:9)", "Cuadrado (1:1 · 1080×1080)", "Vertical (4:5 · 1080×1350)"],
                                     horizontal=True,
                                     key="img4_aspect_sel",
                                 )
-                            _aspect4    = '16:9' if 'LinkedIn' in _asp_sel else '1:1'
+                            if 'LinkedIn' in _asp_sel:
+                                _aspect4 = '16:9'
+                            elif '4:5' in _asp_sel:
+                                _aspect4 = '4:5'
+                            else:
+                                _aspect4 = '1:1'
                             _aspect_lbl = _asp_sel
 
                         _col_qual, _col_info = st.columns([3, 2])
