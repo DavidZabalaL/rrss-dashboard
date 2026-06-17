@@ -408,48 +408,51 @@ def show_post_quick():
         use_container_width=False,
     )
 
-    # ── Prompts de Imagen ──────────────────────────────────────────────────────
+    # ── Imagen: Prompts + Generación directa + Editor completo ────────────────
     st.markdown("---")
-    with st.expander("🎨  Generar Prompts de Imagen", expanded=False):
+    with st.expander("🎨  Imagen — Prompts, Generación y Editor", expanded=False):
         from modules.parrilla import (
-            _build_image_prompt_request, _call_claude_json,
-            _parse_json_obj, _MASTER_PROMPTS,
+            _build_image_prompt_request, _call_claude_json, _parse_json_obj,
+            _MASTER_PROMPTS, _generate_imagen, _edit_imagen_gemini,
+            _pleca_ui, _logo_adder_ui,
         )
+
         _img_row = {
-            'Tema':           saved.get('tema', ''),
-            'Pilar':          (brand.get('rrss', {}).get('pilares', [{}]) or [{}])[0].get('label', ''),
-            'Arte Sugerida':  st.session_state.get(f"pq_edit_arte_{result_key}", '') or sections.get('arte_sugerencia', ''),
-            'Copy LinkedIn':  st.session_state.get(f"pq_edit_li_{result_key}",   '') or sections.get('copy_linkedin',   ''),
-            'Texto en Imagen': st.session_state.get(f"pq_edit_ti_{result_key}", '') or sections.get('texto_imagen',     ''),
-            'Formato':        'Imagen estática',
-            'Fecha':          '',
-            'Tipo':           'regular',
+            'Tema':            saved.get('tema', ''),
+            'Pilar':           (brand.get('rrss', {}).get('pilares', [{}]) or [{}])[0].get('label', ''),
+            'Arte Sugerida':   sections.get('arte_sugerencia', ''),
+            'Copy LinkedIn':   sections.get('copy_linkedin', ''),
+            'Texto en Imagen': sections.get('texto_imagen', ''),
+            'Formato':         'Imagen estática',
+            'Fecha':           '',
+            'Tipo':            'regular',
         }
 
+        # Estilo + formato
         _pq_style_map = {
             'Libre (sin estilo fijo)': 'libre',
             'Isométrico':              'isometric',
             'Cards corporativo':       'cards',
             'Infografía':              'infographic',
         }
-        _pq_style_sel = st.radio(
-            "Estilo visual", list(_pq_style_map.keys()), horizontal=True, key="pq_img_style",
+        _sc1, _sc2 = st.columns([3, 2])
+        _pq_style_sel = _sc1.radio(
+            "Estilo visual", list(_pq_style_map.keys()), key="pq_img_style",
         )
         _pq_style_val = _pq_style_map[_pq_style_sel]
-        _pq_red_img   = st.radio(
+        _pq_red_img = _sc2.radio(
             "Formato destino",
             ["LinkedIn (1200×628)", "Instagram / Facebook (1080×1080)", "Ambos"],
-            horizontal=True, key="pq_img_red",
+            key="pq_img_red",
         )
 
-        _pq_ti = _img_row['Texto en Imagen']
-        if _pq_ti and str(_pq_ti).strip().lower() not in ('nan', 'none', ''):
-            st.caption(f"✏️ Texto en imagen detectado: *{str(_pq_ti)[:100]}*")
-        else:
-            st.caption("ℹ️ Sin texto en imagen — completa el campo arriba para mayor precisión.")
+        _ti_img = sections.get('texto_imagen', '')
+        if _ti_img and str(_ti_img).strip().lower() not in ('nan', 'none', ''):
+            st.caption(f"✏️ Texto en imagen detectado: *{str(_ti_img)[:100]}*")
 
+        # ── Prompts ──────────────────────────────────────────────────────────
         _pq_img_cache = f"pq_img_prompts_{marca_key}"
-        if st.button("✨  Generar Prompts de Imagen", type="primary",
+        if st.button("✨  Generar Prompts (ChatGPT + Gemini)",
                      use_container_width=True, key="btn_pq_img_prompt"):
             st.session_state.pop(_pq_img_cache, None)
             _pq_req = _build_image_prompt_request(_img_row, brand, _pq_red_img, _pq_style_val)
@@ -461,117 +464,200 @@ def show_post_quick():
                         _pq_res = {'error': 'No se pudo parsear', 'raw': _pq_raw}
                     st.session_state[_pq_img_cache] = _pq_res
                 except Exception as _e_pq:
-                    st.error(f"Error al generar: {_e_pq}")
+                    st.error(f"Error al generar prompts: {_e_pq}")
 
+        _pq_prompt_gen = ''
         if _pq_img_cache in st.session_state:
             _pq_res = st.session_state[_pq_img_cache]
-            if 'error' in _pq_res:
-                st.error(_pq_res['error'])
-                if 'raw' in _pq_res:
-                    with st.expander("Respuesta cruda"):
-                        st.text(_pq_res['raw'])
-            else:
+            if 'error' not in _pq_res:
                 _pq_desc = _pq_res.get('descripcion_corta', '')
                 if _pq_desc:
-                    st.markdown(f"**Imagen:** {_pq_desc}")
-                st.markdown("---")
+                    st.caption(f"**Descripción:** {_pq_desc}")
                 _col_d, _col_g = st.columns(2)
                 with _col_d:
-                    st.markdown("### 🤖 DALL-E 3 · ChatGPT")
+                    st.markdown("**🤖 DALL-E 3 · ChatGPT**")
                     _pq_dalle  = _pq_res.get('dalle3', {})
                     _pq_pt     = _pq_dalle.get('prompt', '')
                     _pq_full_d = f"{_pq_pt}\n\n{_MASTER_PROMPTS[_pq_style_val]}" if _pq_style_val in _MASTER_PROMPTS else _pq_pt
                     st.code(_pq_full_d, language=None)
                     if _pq_dalle.get('notas'):
                         st.caption(f"💡 {_pq_dalle['notas']}")
-                    if _pq_style_val in _MASTER_PROMPTS:
-                        st.caption(f"✅ Master **{_pq_style_sel}** incluido")
                 with _col_g:
-                    st.markdown("### 🌐 Gemini Imagen · Google")
+                    st.markdown("**🌐 Gemini Imagen · Google**")
                     _pq_gem    = _pq_res.get('gemini', {})
                     _pq_ptg    = _pq_gem.get('prompt', '')
                     _pq_full_g = f"{_pq_ptg}\n\n{_MASTER_PROMPTS[_pq_style_val]}" if _pq_style_val in _MASTER_PROMPTS else _pq_ptg
                     st.code(_pq_full_g, language=None)
                     if _pq_gem.get('notas'):
                         st.caption(f"💡 {_pq_gem['notas']}")
-                    if _pq_style_val in _MASTER_PROMPTS:
-                        st.caption(f"✅ Master **{_pq_style_sel}** incluido")
+                _pq_prompt_gen = _pq_full_g
 
-    # ── Editor de Imagen ───────────────────────────────────────────────────────
-    st.markdown("---")
-    with st.expander("🖼️  Editor de Imagen", expanded=False):
-        import io as _io
-        from modules.parrilla import _pleca_ui, _logo_adder_ui, _edit_imagen_gemini
+        # ── Generación directa con Imagen 4 ──────────────────────────────────
+        st.markdown("---")
+        st.markdown("### 🖼️ Generar imagen con Imagen 4")
 
-        _pq_hist_key = f"pq_img_hist_{marca_key}"
-        if _pq_hist_key not in st.session_state:
-            st.session_state[_pq_hist_key] = []
-        _pq_hist = st.session_state[_pq_hist_key]
+        if 'LinkedIn' in _pq_red_img and 'Instagram' not in _pq_red_img:
+            _pq_aspect  = '16:9'
+            _pq_asp_lbl = 'LinkedIn 16:9'
+        elif 'Instagram' in _pq_red_img or 'Facebook' in _pq_red_img:
+            _asp_sel = st.radio(
+                "Formato", ["Cuadrado (1:1 · 1080×1080)", "Vertical (4:5 · 1080×1350)"],
+                horizontal=True, key="pq_asp_ig",
+            )
+            _pq_aspect  = '4:5' if '4:5' in _asp_sel else '1:1'
+            _pq_asp_lbl = _asp_sel
+        else:
+            _asp_sel = st.radio(
+                "Formato", ["LinkedIn (16:9)", "Cuadrado (1:1)", "Vertical (4:5)"],
+                horizontal=True, key="pq_asp_all",
+            )
+            _pq_aspect  = '16:9' if 'LinkedIn' in _asp_sel else ('4:5' if '4:5' in _asp_sel else '1:1')
+            _pq_asp_lbl = _asp_sel
 
+        _qual_sel = st.radio(
+            "Motor", ["⚡ Rápida", "⭐ Estándar", "💎 Ultra", "🍌 Nano Banana"],
+            index=1, horizontal=True, key="pq_img_quality",
+        )
+        _qual_map = {
+            "⚡ Rápida": "fast", "⭐ Estándar": "standard",
+            "💎 Ultra": "ultra", "🍌 Nano Banana": "nano_banana",
+        }
+        _pq_quality = _qual_map[_qual_sel]
+        _time_est   = {"fast": "~10 seg", "standard": "~20 seg", "ultra": "~40 seg", "nano_banana": "~30 seg"}
+
+        _pq_gen_key  = f"pq_gen_img_{marca_key}"
+        _pq_edit_key = f"pq_gen_edits_{marca_key}"
+
+        _gc1, _gc2 = st.columns([4, 1])
+        _pq_gen_btn = _gc1.button(
+            "🎨  Generar imagen con Imagen 4",
+            type="primary", use_container_width=True,
+            key="btn_pq_gen_img",
+            disabled=not _pq_prompt_gen,
+        )
+        _gc2.caption(_time_est[_pq_quality])
+
+        if not _pq_prompt_gen:
+            st.caption("⬆️ Genera los prompts primero para habilitar la generación directa.")
+
+        _pq_gen_err = st.empty()
+        if _pq_gen_btn and _pq_prompt_gen:
+            st.session_state.pop(_pq_gen_key, None)
+            st.session_state.pop(_pq_edit_key, None)
+            _spin_map = {"fast": "10-15", "standard": "20-30", "ultra": "35-50", "nano_banana": "30-60"}
+            with st.spinner(f"Generando imagen… ({_spin_map.get(_pq_quality, '20-40')} segundos)"):
+                try:
+                    _gen_bytes = _generate_imagen(_pq_prompt_gen, _pq_aspect, _pq_quality)
+                    st.session_state[_pq_gen_key] = {'bytes': _gen_bytes, 'aspect': _pq_asp_lbl}
+                except Exception as _ge:
+                    _pq_gen_err.error(f"Error al generar imagen: {_ge}")
+
+        # Alternativa: subir imagen externa
+        st.markdown("---")
         _pq_upload = st.file_uploader(
-            "Sube la imagen base", type=['png', 'jpg', 'jpeg', 'webp'],
+            "O sube una imagen externa (JPG/PNG/WEBP)",
+            type=['png', 'jpg', 'jpeg', 'webp'],
             key="pq_img_upload",
         )
         if _pq_upload:
-            _pq_new_bytes = _pq_upload.read()
-            if not _pq_hist or _pq_hist[0].get('bytes') != _pq_new_bytes:
-                st.session_state[_pq_hist_key] = [{'instruction': '[original]', 'bytes': _pq_new_bytes}]
-                _pq_hist = st.session_state[_pq_hist_key]
+            _up_bytes = _pq_upload.read()
+            _prev = st.session_state.get(_pq_gen_key, {})
+            if _prev.get('bytes') != _up_bytes:
+                st.session_state[_pq_gen_key] = {'bytes': _up_bytes, 'aspect': 'subida'}
+                st.session_state.pop(_pq_edit_key, None)
 
-        if _pq_hist:
-            _pq_cur = _pq_hist[-1]['bytes']
-            _pq_col_img, _pq_col_ctrl = st.columns([3, 2])
+        # ── Editor completo ───────────────────────────────────────────────────
+        if _pq_gen_key in st.session_state:
+            _pq_saved_img = st.session_state[_pq_gen_key]
+            _pq_edits     = st.session_state.setdefault(_pq_edit_key, [])
+            _pq_cur       = _pq_edits[-1]['bytes'] if _pq_edits else _pq_saved_img['bytes']
+            _pq_ver       = len(_pq_edits) + 1
+
+            st.markdown("---")
+            _pq_col_img, _pq_col_ctrl = st.columns([1, 1], gap="large")
 
             with _pq_col_img:
                 st.image(_pq_cur, use_container_width=True)
-                if len(_pq_hist) > 1:
-                    if st.button("↩️ Deshacer", key="pq_img_undo", use_container_width=True):
-                        st.session_state[_pq_hist_key] = _pq_hist[:-1]
-                        st.rerun()
-                _pq_fname = f"post_{brand.get('label','').replace(' ','_')}_{saved.get('tema','')[:20].replace(' ','_')}.png"
+                if _pq_edits:
+                    st.caption(f"Versión {_pq_ver} · {len(_pq_edits)} edición(es) aplicada(s)")
+
+                _pq_fname = (
+                    f"post_{brand.get('label','').replace(' ','_')}_"
+                    f"{saved.get('tema','')[:25].replace(' ','_')}_v{_pq_ver}.png"
+                )
                 st.download_button(
-                    "📥 Descargar imagen", data=_pq_cur,
-                    file_name=_pq_fname, mime="image/png",
-                    use_container_width=True, key="pq_img_dl",
+                    f"📥 Descargar v{_pq_ver} (.png)",
+                    data=_pq_cur, file_name=_pq_fname, mime="image/png",
+                    use_container_width=True, key="pq_dl_img",
                 )
 
-            with _pq_col_ctrl:
                 _pq_logo_res = _logo_adder_ui(f"pq_{marca_key}", _pq_cur, brand)
                 if _pq_logo_res is not None:
-                    if _pq_hist and _pq_hist[-1].get('instruction') == '[logo agregado]':
-                        _pq_hist[-1] = {'instruction': '[logo agregado]', 'bytes': _pq_logo_res}
+                    if _pq_edits and _pq_edits[-1].get('instruction') == '[logo agregado]':
+                        _pq_edits[-1] = {'instruction': '[logo agregado]', 'bytes': _pq_logo_res}
                     else:
-                        _pq_hist.append({'instruction': '[logo agregado]', 'bytes': _pq_logo_res})
+                        _pq_edits.append({'instruction': '[logo agregado]', 'bytes': _pq_logo_res})
                     st.rerun()
 
-                _pq_txt_pleca = st.session_state.get(f"pq_edit_ti_{result_key}", '') or sections.get('texto_imagen', '')
-                _pq_pleca_res = _pleca_ui(f"pq_{marca_key}", _pq_cur, brand, texto=_pq_txt_pleca)
-                if _pq_pleca_res is not None:
-                    if _pq_hist and _pq_hist[-1].get('instruction') == '[pleca agregada]':
-                        _pq_hist[-1] = {'instruction': '[pleca agregada]', 'bytes': _pq_pleca_res}
-                    else:
-                        _pq_hist.append({'instruction': '[pleca agregada]', 'bytes': _pq_pleca_res})
-                    st.rerun()
-
-                st.markdown("**✨ Editar con IA**")
-                _pq_ai_instr = st.text_area(
-                    "Instrucción de edición", height=80, key="pq_img_ai_instr",
-                    placeholder="Ej: Hazla más oscura, añade tono azul, elimina el fondo…",
+                _pq_pleca_res = _pleca_ui(
+                    f"pq_{marca_key}", _pq_cur, brand,
+                    texto=sections.get('texto_imagen', ''),
                 )
-                if st.button("🪄 Aplicar edición IA", key="pq_img_ai_btn",
-                             type="primary", use_container_width=True):
-                    if _pq_ai_instr.strip():
-                        with st.spinner("Editando con IA…"):
-                            try:
-                                _pq_edited = _edit_imagen_gemini(_pq_cur, _pq_ai_instr.strip())
-                                _pq_hist.append({'instruction': _pq_ai_instr.strip(), 'bytes': _pq_edited})
-                                st.rerun()
-                            except Exception as _ee:
-                                st.error(f"Error al editar: {_ee}")
+                if _pq_pleca_res is not None:
+                    if _pq_edits and _pq_edits[-1].get('instruction') == '[pleca agregada]':
+                        _pq_edits[-1] = {'instruction': '[pleca agregada]', 'bytes': _pq_pleca_res}
                     else:
-                        st.warning("Escribe una instrucción.")
-        else:
-            st.info("Sube una imagen para comenzar a editar.")
+                        _pq_edits.append({'instruction': '[pleca agregada]', 'bytes': _pq_pleca_res})
+                    st.rerun()
+
+            with _pq_col_ctrl:
+                st.markdown("#### ✏️ Editar imagen con IA")
+                st.caption("Describe qué quieres cambiar. Cada edición genera una nueva versión.")
+
+                _pq_edit_instr = st.text_area(
+                    "Instrucción",
+                    placeholder=(
+                        "Ejemplos:\n"
+                        "• Cambia el fondo a azul oscuro\n"
+                        "• Agrega iluminación tecnológica\n"
+                        "• Hazla más minimalista\n"
+                        "• Elimina el texto y deja la escena"
+                    ),
+                    height=150,
+                    key="pq_img_ai_instr",
+                )
+
+                _pq_apply_col, _pq_undo_col = st.columns([3, 1])
+                with _pq_apply_col:
+                    _pq_apply = st.button(
+                        "🪄 Aplicar edición",
+                        type="primary", use_container_width=True,
+                        disabled=not _pq_edit_instr.strip(),
+                        key="pq_img_ai_btn",
+                    )
+                with _pq_undo_col:
+                    if st.button("↩️", use_container_width=True,
+                                 disabled=not _pq_edits, key="pq_img_undo",
+                                 help="Deshacer última edición"):
+                        _pq_edits.pop()
+                        st.rerun()
+
+                if _pq_edits:
+                    st.markdown("**Historial:**")
+                    for _ei, _eh in enumerate(_pq_edits):
+                        st.caption(f"v{_ei+2}: {_eh['instruction'][:60]}")
+
+                if _pq_apply and _pq_edit_instr.strip():
+                    with st.spinner("Aplicando edición… (15-30 seg)"):
+                        try:
+                            _pq_edited = _edit_imagen_gemini(_pq_cur, _pq_edit_instr.strip())
+                            _pq_edits.append({
+                                'instruction': _pq_edit_instr.strip(),
+                                'bytes': _pq_edited,
+                            })
+                            st.rerun()
+                        except Exception as _ee:
+                            st.error(f"Error al editar: {_ee}")
 
     # ── Agregar a Parrilla ─────────────────────────────────────────────────────
     st.markdown("---")
