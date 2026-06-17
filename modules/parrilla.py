@@ -758,35 +758,50 @@ def _pleca_ui(key_prefix, img_bytes, brand, texto=''):
         for k, v in _brand_colors_raw.items()
         if k in _COLOR_LABELS and v.startswith('#')
     }
-    _swatch_names  = list(_brand_swatches.keys())
-    _swatch_values = list(_brand_swatches.values())
+    # Añadir opción "Personalizado" al final
+    _CUSTOM_LABEL = '✏️ Personalizado…'
+    _swatch_options = list(_brand_swatches.keys()) + [_CUSTOM_LABEL]
 
-    # Color selector: swatches de marca + picker libre
+    # Opciones con hex visible en el label
+    _label_to_opt = {
+        n: f"{n}  {_brand_swatches[n]}" for n in _brand_swatches
+    }
+    _label_to_opt[_CUSTOM_LABEL] = _CUSTOM_LABEL
+    _opt_to_label = {v: k for k, v in _label_to_opt.items()}
+
     _pc1, _pc2 = st.columns([3, 2])
     with _pc1:
-        _sel_swatch = st.selectbox(
+        _sel_opt = st.selectbox(
             "Color de marca",
-            _swatch_names,
+            [_label_to_opt[n] for n in _swatch_options],
             key=f"_pleca_sw_{key_prefix}",
         )
-    # Show color preview chips
-    _chips_html = "".join(
-        f'<span title="{n}" style="display:inline-block;width:20px;height:20px;'
-        f'background:{v};border-radius:4px;margin:2px;border:1px solid #444"></span>'
-        for n, v in _brand_swatches.items()
+    _sel_swatch  = _opt_to_label.get(_sel_opt, _CUSTOM_LABEL)
+    _swatch_hex  = _brand_swatches.get(_sel_swatch, '#1E90FF')
+
+    # Sincronizar el color_picker cuando cambia la selección del selectbox
+    _prev_key = f"_pleca_prev_sw_{key_prefix}"
+    if st.session_state.get(_prev_key) != _sel_opt and _sel_swatch != _CUSTOM_LABEL:
+        st.session_state[f"_pleca_cp_{key_prefix}"] = _swatch_hex
+    st.session_state[_prev_key] = _sel_opt
+
+    # Preview del color seleccionado
+    _preview_hex = _swatch_hex if _sel_swatch != _CUSTOM_LABEL else st.session_state.get(f"_pleca_cp_{key_prefix}", '#1E90FF')
+    st.markdown(
+        f'<div style="height:14px;border-radius:4px;background:{_preview_hex};'
+        f'margin:-4px 0 6px 0;border:1px solid #333;"></div>',
+        unsafe_allow_html=True,
     )
-    st.markdown(_chips_html, unsafe_allow_html=True)
 
     with _pc2:
         _custom_color = st.color_picker(
-            "O elige color libre",
-            value=_brand_swatches.get(_sel_swatch, '#00A1FF'),
+            "Color libre" if _sel_swatch == _CUSTOM_LABEL else "Ajustar",
+            value=st.session_state.get(f"_pleca_cp_{key_prefix}", _swatch_hex),
             key=f"_pleca_cp_{key_prefix}",
         )
 
-    # Final color: if user changed the picker away from the selected swatch, use picker
-    _swatch_hex = _brand_swatches.get(_sel_swatch, '#00A1FF')
-    _final_color = _custom_color if _custom_color != _swatch_hex else _swatch_hex
+    # Color final: swatch de marca O picker si es personalizado o si el usuario lo ajustó
+    _final_color = _custom_color if (_sel_swatch == _CUSTOM_LABEL or _custom_color != _swatch_hex) else _swatch_hex
 
     # Position
     _pleca_pos_opts = {
@@ -3440,15 +3455,11 @@ def show_parrilla():
                         value=str(_prow.get('Copy LinkedIn', '') or ''),
                         height=200, key=f"c_li_{_pi}", disabled=_is_visita,
                     )
-                    if _cv_li.strip():
-                        st.code(_cv_li, language=None)
                     _cv_fb = st.text_area(
                         "Copy Facebook / Instagram",
                         value=str(_prow.get('Copy Facebook / Instagram', '') or ''),
                         height=200, key=f"c_fb_{_pi}", disabled=_is_visita,
                     )
-                    if _cv_fb.strip():
-                        st.code(_cv_fb, language=None)
                     _cv_img = st.text_area(
                         "✏️ Texto en Imagen",
                         value=str(_prow.get('Texto en Imagen', '') or ''),
@@ -3457,21 +3468,15 @@ def show_parrilla():
                         disabled=_is_visita,
                         help="Headline, subtítulo, texto de slides, datos de infografía — el copy que va DENTRO del arte.",
                     )
-                    if _cv_img.strip():
-                        st.code(_cv_img, language=None)
                     _cv_ht = st.text_input(
                         "Hashtags", value=str(_prow.get('Hashtags', '') or ''),
                         key=f"c_ht_{_pi}", disabled=_is_visita,
                     )
-                    if _cv_ht.strip():
-                        st.code(_cv_ht, language=None)
                     _cv_arte = st.text_area(
                         "Arte Sugerida",
                         value=str(_prow.get('Arte Sugerida', '') or ''),
                         height=90, key=f"c_arte_{_pi}", disabled=_is_visita,
                     )
-                    if _cv_arte.strip():
-                        st.code(_cv_arte, language=None)
 
                     # ── Sección de Carrusel: número de slides + generador ──────
                     _is_carrusel = 'carrusel' in _fmt_val or 'carousel' in _fmt_val
