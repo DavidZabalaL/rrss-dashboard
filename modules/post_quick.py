@@ -311,17 +311,14 @@ def show_post_quick():
         st.session_state.pop(result_key, None)
         prompt = _build_quick_prompt(brand, tipo_ctx, tema.strip(), contexto_extra, redes)
 
-        thinking_ph   = st.info(f"⏳ {_prov_lbl} está creando el post… (10-30 segundos)")
-        result_holder = st.empty()
-        full_text     = ""
+        thinking_ph = st.empty()
+        thinking_ph.info(f"⏳ {_prov_lbl} está creando el post…")
+        full_text = ""
 
         try:
             for chunk in _stream_quick_post(prompt):
-                if not full_text:
-                    thinking_ph.empty()
                 full_text += chunk
-                result_holder.text(full_text + "▌")
-            result_holder.empty()
+                thinking_ph.info(f"✍️ Generando… {len(full_text)} caracteres")
             thinking_ph.empty()
 
             sections = _parse_post_sections(full_text, red_sel)
@@ -334,7 +331,6 @@ def show_post_quick():
             }
         except Exception as e:
             thinking_ph.empty()
-            result_holder.empty()
             st.error(f"Error al generar: {e}")
             return
 
