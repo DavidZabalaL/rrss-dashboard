@@ -501,7 +501,8 @@ def _get_pil_font(size, weight='bold'):
     sg_path = _fd / _sg.get(weight, 'SpaceGrotesk-Bold.ttf')
     if sg_path.exists():
         try:
-            return ImageFont.truetype(str(sg_path), size)
+            import io as _fio
+            return ImageFont.truetype(_fio.BytesIO(sg_path.read_bytes()), size)
         except Exception:
             pass
     for p in [

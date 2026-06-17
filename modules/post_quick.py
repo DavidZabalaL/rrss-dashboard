@@ -320,7 +320,7 @@ def show_post_quick():
                 if not full_text:
                     thinking_ph.empty()
                 full_text += chunk
-                result_holder.markdown(full_text + "▌")
+                result_holder.text(full_text + "▌")
             result_holder.empty()
             thinking_ph.empty()
 
@@ -410,7 +410,7 @@ def show_post_quick():
 
     # ── Imagen: Prompts + Generación directa + Editor completo ────────────────
     st.markdown("---")
-    with st.expander("🎨  Imagen — Prompts, Generación y Editor", expanded=False):
+    with st.expander("🎨  Imagen — Prompts, Generación y Editor", expanded=False, key=f"pq_exp_img_{result_key}"):
         from modules.parrilla import (
             _build_image_prompt_request, _call_claude_json, _parse_json_obj,
             _MASTER_PROMPTS, _generate_imagen, _edit_imagen_gemini,
@@ -661,7 +661,7 @@ def show_post_quick():
 
     # ── Agregar a Parrilla ─────────────────────────────────────────────────────
     st.markdown("---")
-    with st.expander("➕  Agregar a Parrilla del mes", expanded=False):
+    with st.expander("➕  Agregar a Parrilla del mes", expanded=False, key=f"pq_exp_par_{result_key}"):
         from datetime import date as _date
         from database import save_parrilla_posts
         import sync as _sync
