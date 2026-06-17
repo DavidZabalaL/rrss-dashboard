@@ -487,14 +487,27 @@ def _logo_adder_ui(key_prefix, img_bytes, brand):
     return None
 
 
-def _get_pil_font(size):
+def _get_pil_font(size, weight='bold'):
     from PIL import ImageFont
     size = max(8, size)
+    _fd = ROOT / 'assets' / 'fonts'
+    _sg = {
+        'light':    'SpaceGrotesk-Light.ttf',
+        'regular':  'SpaceGrotesk-Regular.ttf',
+        'medium':   'SpaceGrotesk-Medium.ttf',
+        'semibold': 'SpaceGrotesk-SemiBold.ttf',
+        'bold':     'SpaceGrotesk-Bold.ttf',
+    }
+    sg_path = _fd / _sg.get(weight, 'SpaceGrotesk-Bold.ttf')
+    if sg_path.exists():
+        try:
+            return ImageFont.truetype(str(sg_path), size)
+        except Exception:
+            pass
     for p in [
         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-        '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
         '/System/Library/Fonts/Helvetica.ttc',
         '/Library/Fonts/Arial Bold.ttf',
         '/Library/Fonts/Arial.ttf',
@@ -534,9 +547,77 @@ def _parse_texto_imagen(texto):
     return h, s
 
 
+def _composite_texto_overlay(img_bytes, texto, font_color='#FFFFFF',
+                              font_weight_h='bold', font_weight_s='regular',
+                              font_size_pct=5, zona='inferior-centro',
+                              margin_h_pct=5, margin_v_pct=8):
+    """Renderiza texto en cualquier zona de la imagen, independiente de la pleca."""
+    from PIL import Image, ImageDraw
+
+    def _hex_to_rgb(h):
+        h = h.lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    base = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+    bw, bh = base.size
+    h_text, s_text = _parse_texto_imagen(texto)
+    if not h_text:
+        out = io.BytesIO()
+        base.convert('RGB').save(out, 'PNG')
+        return out.getvalue()
+
+    tr, tg, tb = _hex_to_rgb(font_color)
+    font_px   = max(14, int(bh * font_size_pct / 100))
+    font_s_px = max(10, int(font_px * 0.65))
+    font_h_obj = _get_pil_font(font_px,   font_weight_h)
+    font_s_obj = _get_pil_font(font_s_px, font_weight_s) if s_text else None
+
+    tdraw = ImageDraw.Draw(base)
+
+    def _measure(font, text):
+        try:
+            bb = font.getbbox(text)
+            return bb[2] - bb[0], bb[3] - bb[1]
+        except Exception:
+            return len(text) * font_px // 2, font_px
+
+    wh, hh = _measure(font_h_obj, h_text)
+    ws, hs = (_measure(font_s_obj, s_text) if font_s_obj else (0, 0))
+    gap     = max(4, int(font_px * 0.25)) if s_text else 0
+    total_h = hh + gap + hs
+
+    mx = int(bw * margin_h_pct / 100)
+    my = int(bh * margin_v_pct / 100)
+
+    parts  = zona.split('-')
+    v_part = parts[0]
+    h_part = parts[1] if len(parts) > 1 else 'centro'
+
+    y = my if v_part == 'superior' else (bh - total_h - my if v_part == 'inferior' else (bh - total_h) // 2)
+
+    if h_part == 'izquierda':
+        x_h, x_s = mx, mx
+    elif h_part == 'derecha':
+        x_h, x_s = bw - wh - mx, bw - ws - mx
+    else:
+        x_h, x_s = (bw - wh) // 2, (bw - ws) // 2
+
+    tdraw.text((x_h + 1, y + 1), h_text, font=font_h_obj, fill=(0, 0, 0, 160))
+    tdraw.text((x_h,     y),     h_text, font=font_h_obj, fill=(tr, tg, tb, 255))
+    if s_text and font_s_obj:
+        sy = y + hh + gap
+        tdraw.text((x_s + 1, sy + 1), s_text, font=font_s_obj, fill=(0, 0, 0, 160))
+        tdraw.text((x_s,     sy),     s_text, font=font_s_obj, fill=(tr, tg, tb, 255))
+
+    out = io.BytesIO()
+    base.convert('RGB').save(out, 'PNG')
+    return out.getvalue()
+
+
 def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85,
                      shadow=False, shadow_intensity=60,
-                     texto='', font_color='#FFFFFF'):
+                     texto='', font_color='#FFFFFF',
+                     font_weight='bold', font_size_pct=None):
     """Dibuja una pleca de color sobre la imagen. Retorna PNG bytes."""
     from PIL import Image, ImageDraw, ImageFilter
 
@@ -606,10 +687,13 @@ def _composite_pleca(img_bytes, color_hex, position, thickness_pct, opacity=0.85
         h_text, s_text = _parse_texto_imagen(texto)
         if h_text:
             tr, tg, tb = _hex_to_rgb(font_color)
-            font_size_h = max(14, min(72, int(thick * 0.38)))
-            font_size_s = max(10, min(52, int(thick * 0.23)))
-            font_h = _get_pil_font(font_size_h)
-            font_s = _get_pil_font(font_size_s) if s_text else None
+            if font_size_pct:
+                font_size_h = max(14, min(120, int(bh * font_size_pct / 100)))
+            else:
+                font_size_h = max(14, min(72, int(thick * 0.38)))
+            font_size_s = max(10, int(font_size_h * 0.65))
+            font_h = _get_pil_font(font_size_h, font_weight)
+            font_s = _get_pil_font(font_size_s, 'regular') if s_text else None
 
             tdraw = ImageDraw.Draw(combined)
             rx1, ry1, rx2, ry2 = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
@@ -753,38 +837,82 @@ def _pleca_ui(key_prefix, img_bytes, brand, texto=''):
     _thick_f  = _thick_pct / 100
     _opac_f   = _opacity   / 100
 
-    # Texto sobre la pleca
-    st.markdown("**✏️ Texto sobre la pleca** *(opcional)*")
-    _txt_cols = st.columns([1, 2])
-    with _txt_cols[0]:
-        _use_texto = st.checkbox(
-            "Agregar texto",
-            value=bool(texto and texto.strip()),
-            key=f"_pleca_txt_on_{key_prefix}",
-        )
-        _font_color = st.color_picker(
-            "Color de texto",
-            value='#FFFFFF',
-            key=f"_pleca_fc_{key_prefix}",
-            disabled=not _use_texto,
-        )
-    with _txt_cols[1]:
-        _texto_val = st.text_area(
-            "Headline / Subtítulo",
-            value=texto or '',
-            height=100,
-            key=f"_pleca_txt_{key_prefix}",
-            disabled=not _use_texto,
-            help="Formato sugerido:\nHeadline: Tu título aquí\nSubtítulo: Texto secundario",
-        )
+    # ── Texto en imagen ───────────────────────────────────────────────────────
+    st.markdown("**✏️ Texto en imagen**")
+    _texto_val = st.text_area(
+        "Contenido (Headline / Subtítulo)",
+        value=texto or '',
+        height=95,
+        key=f"_pleca_txt_{key_prefix}",
+        placeholder="Headline: Tu título aquí\nSubtítulo: Texto complementario",
+        help="Space Grotesk · soporta acentos, ñ, signos de puntuación",
+    )
 
-    _texto_final = _texto_val.strip() if _use_texto else ''
+    _texto_final = _texto_val.strip()
+    _tpos_val    = 'en-pleca'
+    _font_color  = '#FFFFFF'
+    _peso_final  = 'bold'
+    _font_sz     = 5
+    _margin_h    = 5
+    _margin_v    = 8
 
-    # Live preview
+    if _texto_final:
+        _ft1, _ft2, _ft3 = st.columns([2, 1.5, 1.5])
+        _peso_opts = {
+            'Light': 'light', 'Regular': 'regular', 'Medium': 'medium',
+            'SemiBold': 'semibold', 'Bold': 'bold',
+        }
+        _peso_sel  = _ft1.selectbox("Peso tipográfico", list(_peso_opts.keys()),
+                                     index=4, key=f"_pleca_fw_{key_prefix}")
+        _font_sz   = _ft2.slider("Tamaño (%)", 2, 15, 5, step=1,
+                                  key=f"_pleca_fsize_{key_prefix}",
+                                  help="% del alto de la imagen")
+        _font_color = _ft3.color_picker("Color texto", '#FFFFFF',
+                                         key=f"_pleca_fc_{key_prefix}")
+        _peso_final = _peso_opts[_peso_sel]
+
+        _tpos_opts = {
+            '📌 Sobre la pleca':        'en-pleca',
+            '⬇ Inferior — centro':     'inferior-centro',
+            '⬇ Inferior — izquierda':  'inferior-izquierda',
+            '⬇ Inferior — derecha':    'inferior-derecha',
+            '⬆ Superior — centro':     'superior-centro',
+            '⬆ Superior — izquierda':  'superior-izquierda',
+            '⬆ Superior — derecha':    'superior-derecha',
+            '⊙ Centro':                'centro-centro',
+            '⊙ Centro — izquierda':    'centro-izquierda',
+            '⊙ Centro — derecha':      'centro-derecha',
+        }
+        _tpos_sel = st.selectbox("Posición del texto", list(_tpos_opts.keys()),
+                                  key=f"_pleca_tpos_{key_prefix}")
+        _tpos_val = _tpos_opts[_tpos_sel]
+
+        if _tpos_val != 'en-pleca':
+            _mg1, _mg2 = st.columns(2)
+            _margin_h = _mg1.slider("Margen horizontal (%)", 0, 25, 5,
+                                     key=f"_pleca_mh_{key_prefix}")
+            _margin_v = _mg2.slider("Margen vertical (%)",   0, 25, 8,
+                                     key=f"_pleca_mv_{key_prefix}")
+
+    # ── Vista previa ──────────────────────────────────────────────────────────
     try:
-        _preview = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
-                                    shadow=_use_shadow, shadow_intensity=_shadow_int,
-                                    texto=_texto_final, font_color=_font_color)
+        _preview = _composite_pleca(
+            img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
+            shadow=_use_shadow, shadow_intensity=_shadow_int,
+            texto=_texto_final if _tpos_val == 'en-pleca' else '',
+            font_color=_font_color, font_weight=_peso_final, font_size_pct=_font_sz,
+        )
+        if _texto_final and _tpos_val != 'en-pleca':
+            _preview = _composite_texto_overlay(
+                _preview, _texto_final,
+                font_color=_font_color,
+                font_weight_h=_peso_final,
+                font_weight_s='regular' if _peso_final in ('bold', 'semibold') else 'light',
+                font_size_pct=_font_sz,
+                zona=_tpos_val,
+                margin_h_pct=_margin_h,
+                margin_v_pct=_margin_v,
+            )
         st.caption("Vista previa:")
         st.image(_preview, use_container_width=True)
     except Exception:
@@ -793,9 +921,23 @@ def _pleca_ui(key_prefix, img_bytes, brand, texto=''):
     if st.button("✅ Aplicar pleca", key=f"_pleca_apply_{key_prefix}",
                  type="primary", use_container_width=True):
         try:
-            _result = _composite_pleca(img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
-                                       shadow=_use_shadow, shadow_intensity=_shadow_int,
-                                       texto=_texto_final, font_color=_font_color)
+            _result = _composite_pleca(
+                img_bytes, _final_color, _pos_val, _thick_f, _opac_f,
+                shadow=_use_shadow, shadow_intensity=_shadow_int,
+                texto=_texto_final if _tpos_val == 'en-pleca' else '',
+                font_color=_font_color, font_weight=_peso_final, font_size_pct=_font_sz,
+            )
+            if _texto_final and _tpos_val != 'en-pleca':
+                _result = _composite_texto_overlay(
+                    _result, _texto_final,
+                    font_color=_font_color,
+                    font_weight_h=_peso_final,
+                    font_weight_s='regular' if _peso_final in ('bold', 'semibold') else 'light',
+                    font_size_pct=_font_sz,
+                    zona=_tpos_val,
+                    margin_h_pct=_margin_h,
+                    margin_v_pct=_margin_v,
+                )
             st.session_state[_panel_key] = False
             return _result
         except Exception as _pe:
