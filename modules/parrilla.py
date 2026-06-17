@@ -3440,11 +3440,15 @@ def show_parrilla():
                         value=str(_prow.get('Copy LinkedIn', '') or ''),
                         height=200, key=f"c_li_{_pi}", disabled=_is_visita,
                     )
+                    if _cv_li.strip():
+                        st.code(_cv_li, language=None)
                     _cv_fb = st.text_area(
                         "Copy Facebook / Instagram",
                         value=str(_prow.get('Copy Facebook / Instagram', '') or ''),
                         height=200, key=f"c_fb_{_pi}", disabled=_is_visita,
                     )
+                    if _cv_fb.strip():
+                        st.code(_cv_fb, language=None)
                     _cv_img = st.text_area(
                         "✏️ Texto en Imagen",
                         value=str(_prow.get('Texto en Imagen', '') or ''),
@@ -3453,15 +3457,21 @@ def show_parrilla():
                         disabled=_is_visita,
                         help="Headline, subtítulo, texto de slides, datos de infografía — el copy que va DENTRO del arte.",
                     )
+                    if _cv_img.strip():
+                        st.code(_cv_img, language=None)
                     _cv_ht = st.text_input(
                         "Hashtags", value=str(_prow.get('Hashtags', '') or ''),
                         key=f"c_ht_{_pi}", disabled=_is_visita,
                     )
+                    if _cv_ht.strip():
+                        st.code(_cv_ht, language=None)
                     _cv_arte = st.text_area(
                         "Arte Sugerida",
                         value=str(_prow.get('Arte Sugerida', '') or ''),
                         height=90, key=f"c_arte_{_pi}", disabled=_is_visita,
                     )
+                    if _cv_arte.strip():
+                        st.code(_cv_arte, language=None)
 
                     # ── Sección de Carrusel: número de slides + generador ──────
                     _is_carrusel = 'carrusel' in _fmt_val or 'carousel' in _fmt_val
