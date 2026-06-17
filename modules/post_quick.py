@@ -358,7 +358,6 @@ def show_post_quick():
             "Copy LinkedIn", value=sections['copy_linkedin'],
             height=220, key=f"pq_edit_li_{result_key}", label_visibility="collapsed",
         )
-        st.code(_li_val, language=None)
 
     # Copy Facebook
     if sections.get('copy_facebook'):
@@ -367,7 +366,6 @@ def show_post_quick():
             "Copy Facebook", value=sections['copy_facebook'],
             height=220, key=f"pq_edit_fb_{result_key}", label_visibility="collapsed",
         )
-        st.code(_fb_val, language=None)
 
     # Texto en Imagen
     st.markdown("**✏️ Texto en Imagen**")
@@ -376,8 +374,6 @@ def show_post_quick():
         height=100, key=f"pq_edit_ti_{result_key}", label_visibility="collapsed",
         help="Headline y subtítulo que irán impresos dentro del diseño gráfico",
     )
-    if _ti_val.strip():
-        st.code(_ti_val, language=None)
 
     # Hashtags + CTA en columnas
     _hc1, _hc2 = st.columns(2)
@@ -387,16 +383,12 @@ def show_post_quick():
             "Hashtags", value=sections.get('hashtags', ''),
             height=75, key=f"pq_edit_ht_{result_key}", label_visibility="collapsed",
         )
-        if _ht_val.strip():
-            st.code(_ht_val, language=None)
     with _hc2:
         st.markdown("**📢 CTA**")
         _cta_val = st.text_input(
             "CTA", value=sections.get('cta', ''),
             key=f"pq_edit_cta_{result_key}", label_visibility="collapsed",
         )
-        if _cta_val.strip():
-            st.code(_cta_val, language=None)
 
     # Arte Sugerida
     st.markdown("**🎨 Arte Sugerida**")
@@ -404,8 +396,6 @@ def show_post_quick():
         "Arte Sugerida", value=sections.get('arte_sugerencia', ''),
         height=100, key=f"pq_edit_arte_{result_key}", label_visibility="collapsed",
     )
-    if _arte_val.strip():
-        st.code(_arte_val, language=None)
 
     # Descarga completa
     st.markdown("---")
