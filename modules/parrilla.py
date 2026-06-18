@@ -3441,7 +3441,7 @@ def show_parrilla():
                     f"  —  {_estado}"
                 )
 
-                with st.expander(_exp_lbl, expanded=False):
+                with st.expander(_exp_lbl, expanded=False, key=f"par_card_{_pi}"):
                     _cc1, _cc2 = st.columns(2)
                     _cv_tema = _cc1.text_input(
                         "Tema", value=_tema,
