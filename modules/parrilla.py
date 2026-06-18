@@ -3458,7 +3458,7 @@ def show_parrilla():
                 )
                 _exp_lbl = (
                     f"📝  {_fecha}  ·  {_dia}  ·  "
-                    f"{(_tema[:55] + '…') if len(_tema) > 55 else (_tema or '(sin tema)')}"
+                    f"{(_tema[:90] + '…') if len(_tema) > 90 else (_tema or '(sin tema)')}"
                     f"  —  {_estado}"
                 )
 
