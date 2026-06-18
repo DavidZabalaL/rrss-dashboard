@@ -1079,6 +1079,7 @@ _SPANISH_TEXT_SUFFIX = (
 
 # Font search paths — tried in order, first match wins
 _FONT_PATHS = [
+    str(Path(__file__).parent.parent / 'assets' / 'fonts' / 'SpaceGrotesk-Bold.ttf'),
     '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
     '/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf',
@@ -1093,19 +1094,39 @@ _FONT_PATHS = [
 
 def _load_font(size, brand_id=None):
     """Return the best available PIL font at the given size.
-    Checks brand-specific fonts first (marca/<brand_id>/fonts/)."""
+    Prioritises Space Grotesk from assets/fonts/ via BytesIO (works on
+    Streamlit Cloud where string paths can fail silently).  Falls back to
+    brand-specific fonts, then system fonts, then PIL default."""
     from PIL import ImageFont
-    paths = []
+    import io as _fio
+    size = max(8, size)
+
+    # 1. Space Grotesk from assets/fonts/ via BytesIO — primary path
+    _sg = ROOT / 'assets' / 'fonts' / 'SpaceGrotesk-Bold.ttf'
+    if _sg.exists():
+        try:
+            return ImageFont.truetype(_fio.BytesIO(_sg.read_bytes()), size)
+        except Exception:
+            pass
+
+    # 2. Brand-specific fonts (also via BytesIO)
     if brand_id:
-        brand_font_dir = ROOT / 'marca' / brand_id / 'fonts'
-        for candidate in ('SpaceGrotesk-Bold.ttf', 'bold.ttf', 'regular.ttf'):
-            paths.append(str(brand_font_dir / candidate))
-    paths += _FONT_PATHS
-    for fp in paths:
+        _bdir = ROOT / 'marca' / brand_id / 'fonts'
+        for _cand in ('SpaceGrotesk-Bold.ttf', 'bold.ttf', 'regular.ttf'):
+            _p = _bdir / _cand
+            if _p.exists():
+                try:
+                    return ImageFont.truetype(_fio.BytesIO(_p.read_bytes()), size)
+                except Exception:
+                    pass
+
+    # 3. System font paths (string — works on most Linux distros)
+    for fp in _FONT_PATHS:
         try:
             return ImageFont.truetype(fp, size)
         except Exception:
             pass
+
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
