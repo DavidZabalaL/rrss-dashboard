@@ -396,7 +396,8 @@ with st.sidebar:
                      type="primary" if marca_activa == 'k1' else "secondary",
                      key="btn_k1"):
             st.session_state.marca_activa = 'k1'
-            for k in ('f_red', 'f_año', 'f_mes'):
+            for k in ('f_red', 'f_año', 'f_mes',
+                      'parrilla_df', 'parrilla_meta', 'parrilla_historial'):
                 st.session_state.pop(k, None)
             st.rerun()
     with col_sym:
@@ -404,7 +405,8 @@ with st.sidebar:
                      type="primary" if marca_activa == 'sym' else "secondary",
                      key="btn_sym"):
             st.session_state.marca_activa = 'sym'
-            for k in ('f_red', 'f_año', 'f_mes'):
+            for k in ('f_red', 'f_año', 'f_mes',
+                      'parrilla_df', 'parrilla_meta', 'parrilla_historial'):
                 st.session_state.pop(k, None)
             st.rerun()
 

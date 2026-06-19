@@ -2163,10 +2163,13 @@ def _github_sync_db():
     """Commit the SQLite DB to GitHub via Git Data API (supports up to 100 MB).
 
     Uses only stdlib (urllib.request, base64, json).
+    Skips the upload if the DB file hasn't changed since the last sync
+    (detected via MD5 hash stored in session_state).
     Returns True on success, False on any failure (never raises).
     """
     try:
         import urllib.request
+        import hashlib
         from database import DB_PATH as _db_path
 
         _load_env()
@@ -2177,11 +2180,17 @@ def _github_sync_db():
         if not token or not repo or not _db_path.exists():
             return False
 
+        # Skip sync if DB hasn't changed since last successful sync
+        db_bytes = _db_path.read_bytes()
+        db_md5   = hashlib.md5(db_bytes).hexdigest()
+        if st.session_state.get('_db_synced_md5') == db_md5:
+            return True
+
         api    = f"https://api.github.com/repos/{repo}"
         hdrs   = {'Authorization': f'token {token}',
                   'Accept': 'application/vnd.github+json',
                   'Content-Type': 'application/json'}
-        db_b64 = base64.b64encode(_db_path.read_bytes()).decode('ascii')
+        db_b64 = base64.b64encode(db_bytes).decode('ascii')
 
         def _req(method, url, body=None):
             data = json.dumps(body).encode() if body else None
@@ -2213,6 +2222,7 @@ def _github_sync_db():
 
         # 6. Update branch ref
         _req('PATCH', f"{api}/git/refs/heads/{branch}", {"sha": new_commit})
+        st.session_state['_db_synced_md5'] = db_md5
         return True
     except Exception:
         return False
