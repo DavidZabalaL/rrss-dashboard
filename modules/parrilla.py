@@ -2809,6 +2809,8 @@ def show_parrilla():
                    f"Días configurados: {', '.join(dias_pub)}")
         return
 
+    marca_nombre = brand.get('label', '')
+
     if _is_visita:
         # Para visita: cargar parrilla directamente desde DB sin mostrar el generador
         try:
