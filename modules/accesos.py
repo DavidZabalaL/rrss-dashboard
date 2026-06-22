@@ -99,6 +99,8 @@ def show_accesos():
                          key="pg_acc_save_pw", type="primary"):
                 if new_pw.strip():
                     update_usuario_password(sel_user, new_pw.strip())
+                    from modules.parrilla import _github_sync_db
+                    _github_sync_db()
                     st.success(f"✅ Contraseña de **{sel_user}** actualizada.")
                     st.rerun()
                 else:
@@ -128,6 +130,8 @@ def show_accesos():
                 if new_un.strip() and new_nb.strip() and new_p.strip():
                     add_usuario(new_un.strip(), new_p.strip(),
                                 new_nb.strip(), role=new_rl)
+                    from modules.parrilla import _github_sync_db
+                    _github_sync_db()
                     st.success(f"✅ Usuario **{new_un}** creado con rol **{new_rl}**.")
                     st.rerun()
                 else:
@@ -143,6 +147,8 @@ def show_accesos():
                 if st.button("🗑️ Eliminar", use_container_width=True,
                              key="pg_acc_del_btn", type="secondary"):
                     delete_usuario(del_u)
+                    from modules.parrilla import _github_sync_db
+                    _github_sync_db()
                     st.success(f"✅ Usuario **{del_u}** eliminado.")
                     st.rerun()
 
