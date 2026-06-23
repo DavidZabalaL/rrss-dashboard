@@ -4138,10 +4138,23 @@ def show_parrilla():
                     for _sl in _car_slides:
                         _ico = _tipo_icon.get(_sl.get('tipo',''), '📌')
                         with st.expander(f"{_ico} Slide {_sl['numero']}: {_sl.get('titulo_slide','')}", expanded=False):
+                            _tit_col, _sub_col = st.columns(2)
+                            _sl['titulo_slide'] = _tit_col.text_input(
+                                "Título en imagen",
+                                value=_sl.get('titulo_slide', ''),
+                                key=f"car_titulo_{_sl['numero']}",
+                                help="Texto grande que aparece sobre la imagen.",
+                            )
+                            _sl['subtitulo'] = _sub_col.text_input(
+                                "Subtítulo en imagen",
+                                value=_sl.get('subtitulo', ''),
+                                key=f"car_sub_{_sl['numero']}",
+                                help="Texto secundario debajo del título. Déjalo vacío para omitirlo.",
+                            )
                             _sl['escena'] = st.text_area(
-                                "Escena (editable antes de generar)",
+                                "Escena / prompt de imagen",
                                 value=_sl.get('escena', ''),
-                                height=90,
+                                height=80,
                                 key=f"car_escena_{_sl['numero']}",
                             )
 
