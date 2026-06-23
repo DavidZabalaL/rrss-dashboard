@@ -85,6 +85,47 @@ _MASTER_PROMPTS = {
     ),
 }
 
+_CAROUSEL_MASTER_PROMPTS = {
+    'cards': (
+        "SPLIT-LAYOUT CORPORATE PHOTOGRAPHY. RIGHT-DOMINANT COMPOSITION. "
+        "CRITICAL: All hero subjects — people, cameras, technology, vehicles, servers, operators — "
+        "must be placed in the RIGHT 60% of the frame. "
+        "The LEFT 35-40% must be naturally clean and light: open sky, soft neutral background, "
+        "architectural negative space, or a gentle light-to-white gradient. "
+        "No visual weight in the left half — that area is reserved for text overlay. "
+        "STYLE: Premium corporate security technology. Photorealistic commercial photography. "
+        "Real environments with elegant 3D technology highlights. "
+        "Electric-blue data glows, LPR readouts, network paths — all confined to the right side. "
+        "Verkada / Motorola Solutions / Genetec enterprise marketing aesthetic. "
+        "PBR materials. Ray-traced reflections. Cinematic depth of field. 8K. Ultra-detailed. "
+        "NO cyberpunk. NO sci-fi floating UI. NO holograms. NO clutter. "
+        "NO text. NO logos. NO watermarks."
+    ),
+    'isometric': (
+        "SPLIT-LAYOUT ISOMETRIC DIORAMA. RIGHT-DOMINANT COMPOSITION. "
+        "CRITICAL: The isometric platform and ALL scene elements must occupy the RIGHT 60% of the frame. "
+        "The LEFT 35-40% must be pure white or very light neutral gray — "
+        "clean empty space that transitions seamlessly into the white diorama base at the left edge. "
+        "STYLE: Premium smart-city isometric miniature. Floating rounded platform with blue accent lighting. "
+        "Apple keynote product-render aesthetic. Detailed roads, buildings, vehicles, security infrastructure. "
+        "Elegant blue and cyan lighting accents. PBR materials. Ray-traced reflections. 8K. Hyperrealistic. "
+        "NO cyberpunk. NO floating dashboards. NO excessive glow. NO text. NO logos. NO watermarks."
+    ),
+    'infographic': (
+        "SPLIT-LAYOUT DIGITAL TWIN VISUALIZATION. RIGHT-DOMINANT COMPOSITION. "
+        "CRITICAL: All city scenes, UI panels, data elements, cameras, operators, infrastructure "
+        "must be positioned in the RIGHT 60% of the frame. "
+        "The LEFT 35-40% must be white or very light gray — "
+        "minimal, clean, open space with no visual weight. "
+        "STYLE: Premium smart-city digital twin. Hyperrealistic city with operational data. "
+        "Glassmorphism UI cards on right side only. Glowing blue pathways, location markers, operational flows. "
+        "Realistic vehicles, cameras, urban infrastructure. Soft atmospheric depth. "
+        "Global illumination. Commercial photography quality. 8K. Hyperrealistic. "
+        "NO cyberpunk. NO holograms. NO excessive glow. NO visual clutter. NO text. NO logos. NO watermarks."
+    ),
+    'libre': '',
+}
+
 _STYLE_OPTIONS = {
     '🏙️ Isométrico':  'isometric',
     '🃏 Cards':        'cards',
@@ -521,6 +562,38 @@ def _get_pil_font(size, weight='bold'):
         return ImageFont.load_default(size=size)
     except Exception:
         return ImageFont.load_default()
+
+
+def _pil_wrap(text, font, max_w, max_lines=None):
+    """Word-wrap `text` into lines that fit within `max_w` pixels using PIL font metrics."""
+    words = str(text).split()
+    lines, cur = [], ''
+    for word in words:
+        test = (cur + ' ' + word).strip()
+        try:
+            w = font.getbbox(test)[2]
+        except Exception:
+            w = len(test) * 28
+        if w <= max_w:
+            cur = test
+        else:
+            if cur:
+                lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines[:max_lines] if max_lines else lines
+
+
+def _hex_to_rgb(h):
+    """Convert '#RRGGBB' or '#RGB' hex string to (R, G, B) int tuple."""
+    h = h.lstrip('#')
+    if len(h) == 3:
+        h = h[0]*2 + h[1]*2 + h[2]*2
+    try:
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+    except Exception:
+        return (0, 0, 0)
 
 
 def _parse_texto_imagen(texto):
@@ -1283,6 +1356,101 @@ def _add_slide_text(img_bytes, titulo, subtitulo, numero, total, brand_id=None):
     result = Image.alpha_composite(img, overlay)
     out = io.BytesIO()
     result.convert('RGB').save(out, format='PNG')
+    return out.getvalue()
+
+
+def _composite_carousel_slide(img_bytes, numero, total, titulo, subtitulo, tipo, brand):
+    """
+    Split-layout compositor for carousel slides.
+    Left ~46%: white panel with logo, number, headline, accent rule, subtitle.
+    Right ~54%: AI-generated scene, fading from white at the boundary.
+    Returns PNG bytes at 1080×1080.
+    """
+    from PIL import Image, ImageDraw
+    SIZE  = 1080
+    PANEL = int(SIZE * 0.46)   # 496 px — hard left-zone boundary
+    FADE  = 180                 # gradient width in px
+    PAD_X = 54
+    PAD_T = 48
+
+    colors    = brand.get('colors', {})
+    PRIMARY   = _hex_to_rgb(colors.get('primary',       '#1e90ff'))
+    TEXT_DARK = _hex_to_rgb(colors.get('text_on_light', '#1A1A1A'))
+    TEXT_GRAY = (88, 98, 118)
+
+    # Paste scene on white canvas
+    scene  = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+    scene  = scene.resize((SIZE, SIZE), Image.LANCZOS)
+    canvas = Image.new('RGBA', (SIZE, SIZE), (255, 255, 255, 255))
+    canvas.paste(scene, (0, 0))
+
+    # White gradient panel — fully opaque on left, fades out over FADE pixels
+    panel = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+    px    = panel.load()
+    for x in range(SIZE):
+        if x < PANEL:
+            a = 255
+        elif x < PANEL + FADE:
+            ratio = (x - PANEL) / FADE
+            a = int(255 * (1 - ratio) ** 1.6)
+        else:
+            a = 0
+        for y in range(SIZE):
+            px[x, y] = (255, 255, 255, a)
+    canvas = Image.alpha_composite(canvas, panel)
+    draw   = ImageDraw.Draw(canvas)
+
+    max_txt_w = PANEL - PAD_X * 2   # ~388 px
+
+    # Logo
+    brand_id  = brand.get('brand_id', '')
+    logo_path = ROOT / 'marca' / brand_id / 'logos' / 'color.png'
+    y_cursor  = PAD_T
+    LOGO_H    = 64
+    if logo_path.exists():
+        try:
+            logo = Image.open(logo_path).convert('RGBA')
+            lw   = int(logo.width * LOGO_H / logo.height)
+            logo = logo.resize((lw, LOGO_H), Image.LANCZOS)
+            canvas.paste(logo, (PAD_X, y_cursor), logo)
+            draw = ImageDraw.Draw(canvas)
+        except Exception:
+            pass
+    y_cursor += LOGO_H + 50
+
+    # Slide number for slides 2 and beyond
+    if numero > 1:
+        f_num = _get_pil_font(52, 'bold')
+        draw.text((PAD_X, y_cursor), f"{numero}.", font=f_num, fill=PRIMARY + (255,))
+        y_cursor += 60
+
+    # Headline — uppercase, dark navy
+    f_head  = _get_pil_font(54, 'bold')
+    h_lines = _pil_wrap(titulo.upper() if titulo else '', f_head, max_txt_w)
+    for ln in h_lines[:3]:
+        draw.text((PAD_X, y_cursor), ln, font=f_head, fill=TEXT_DARK + (255,))
+        y_cursor += 62
+    y_cursor += 6
+
+    # Blue accent rule
+    draw.rectangle([PAD_X, y_cursor, PAD_X + 44, y_cursor + 4], fill=PRIMARY + (255,))
+    y_cursor += 22
+
+    # Subtitle in gray
+    if subtitulo:
+        f_sub   = _get_pil_font(26, 'regular')
+        s_lines = _pil_wrap(subtitulo, f_sub, max_txt_w, max_lines=6)
+        for ln in s_lines:
+            draw.text((PAD_X, y_cursor), ln, font=f_sub, fill=TEXT_GRAY + (255,))
+            y_cursor += 34
+
+    # Slide counter at bottom-left of text panel
+    f_ctr = _get_pil_font(20, 'medium')
+    draw.text((PAD_X, SIZE - PAD_T - 20), f"{numero}/{total}", font=f_ctr,
+              fill=(180, 188, 202, 255))
+
+    out = io.BytesIO()
+    canvas.convert('RGB').save(out, 'PNG')
     return out.getvalue()
 
 
@@ -4167,7 +4335,7 @@ def show_parrilla():
                         type="primary", use_container_width=True, key="btn_car_gen",
                     ):
                         st.session_state.pop(_car_imgs_key, None)
-                        _master    = _MASTER_PROMPTS.get(_car_style, '')
+                        _master    = _CAROUSEL_MASTER_PROMPTS.get(_car_style, '')
                         _car_imgs  = []
                         _cprog     = st.progress(0, text="Iniciando…")
                         _cerr_ph   = st.empty()
@@ -4180,13 +4348,14 @@ def show_parrilla():
                             _fp = f"{_sl['escena']}\n\n{_master}" if _master else _sl['escena']
                             try:
                                 _sb = _generate_imagen(_fp, '1:1', _car_q)
-                                _sb = _add_slide_text(
+                                _sb = _composite_carousel_slide(
                                     _sb,
-                                    _sl.get('titulo_slide', ''),
-                                    _sl.get('subtitulo', ''),
                                     _sl['numero'],
                                     _car_n,
-                                    brand_id=brand.get('brand_id', ''),
+                                    _sl.get('titulo_slide', ''),
+                                    _sl.get('subtitulo', ''),
+                                    _sl.get('tipo', ''),
+                                    brand,
                                 )
                                 _car_imgs.append({
                                     'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
