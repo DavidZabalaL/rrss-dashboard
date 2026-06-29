@@ -3362,6 +3362,9 @@ def show_parrilla():
                             st.write(f"✅ Texto de slides generado para {len(_carousel_idx)} carrusel(es).")
 
                     status.update(label=f"Parrilla lista: {len(df)} piezas", state="complete")
+                    # Clear stale editor diffs so the new parrilla starts clean
+                    for _ek in [k for k in st.session_state if k.startswith('parrilla_compact')]:
+                        del st.session_state[_ek]
                     st.rerun()
                 except Exception as e:
                     status.update(label="Error al generar", state="error")
@@ -3383,6 +3386,9 @@ def show_parrilla():
                         'con_insights': False, 'insights_mes': '', 'brand': brand,
                     }
                     st.info(f"📂 Parrilla de **{MESES_ES[mes]} {año}** cargada desde la base de datos.")
+                    # Clear stale editor diffs from any previous parrilla
+                    for _ek in [k for k in st.session_state if k.startswith('parrilla_compact')]:
+                        del st.session_state[_ek]
             except Exception:
                 pass
 
@@ -3420,6 +3426,8 @@ def show_parrilla():
                                 'con_insights': False, 'insights_mes': '', 'brand': brand,
                             }
                             st.success(f"✅ {len(_rec_posts)} publicaciones recuperadas desde Monday.com.")
+                            for _ek in [k for k in st.session_state if k.startswith('parrilla_compact')]:
+                                del st.session_state[_ek]
                             st.rerun()
                     except Exception as _re:
                         st.error(f"Error al recuperar: {_re}")
@@ -3488,6 +3496,12 @@ def show_parrilla():
 
         _row_h = min(38 * max(len(compact_df), 1) + 42, 500)
 
+        # Dynamic key prevents stale Estado diffs from a previous parrilla bleeding
+        # into a freshly generated or loaded one (e.g. after brand/month switch).
+        _editor_key = (
+            f'parrilla_compact_{meta.get("marca","").replace(" ","_")}_{año}_{mes}'
+        )
+
         if _is_visita:
             st.dataframe(compact_df, use_container_width=True, height=_row_h,
                          hide_index=True)
@@ -3495,7 +3509,7 @@ def show_parrilla():
         else:
             compact_edited = st.data_editor(
                 compact_df, use_container_width=True, num_rows='fixed',
-                column_config=_ccfg, height=_row_h, key='parrilla_compact',
+                column_config=_ccfg, height=_row_h, key=_editor_key,
                 hide_index=True,
             )
 
@@ -3543,6 +3557,8 @@ def show_parrilla():
                         st.session_state['parrilla_df'] = _posts_to_df(_new_posts)
                         st.session_state.pop('_par_del_pending', None)
                         st.success(f"✅ {_del_count} post(s) eliminado(s).")
+                        for _ek in [k for k in st.session_state if k.startswith('parrilla_compact')]:
+                            del st.session_state[_ek]
                         st.rerun()
                     if _cn.button("Cancelar", key="btn_del_cancel"):
                         st.session_state.pop('_par_del_pending', None)
