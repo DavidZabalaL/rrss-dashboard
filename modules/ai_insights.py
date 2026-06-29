@@ -86,7 +86,6 @@ def _stream_analysis(prompt):
         with client.messages.stream(
             model='claude-sonnet-4-6',
             max_tokens=4000,
-            thinking={"type": "adaptive"},
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
             for text in stream.text_stream:
@@ -267,36 +266,35 @@ def show_insights():
             key="btn_analizar_claude",
         )
     with col_clear:
-        if st.button("🗑️  Limpiar", use_container_width=True, key="btn_limpiar_insights"):
-            st.session_state.pop(analysis_key, None)
-            st.rerun()
+        if analysis_key in st.session_state:
+            if st.button("🗑️  Limpiar", use_container_width=True, key="btn_limpiar_insights"):
+                st.session_state.pop(analysis_key, None)
+                st.rerun()
 
     if not api_ok:
         _needed = 'GEMINI_API_KEY' if provider == 'gemini' else 'ANTHROPIC_API_KEY'
         st.warning(f"Configura `{_needed}` en el archivo `.env` para habilitar el análisis con IA.")
         return
 
-    # ── Llamada a Claude con streaming ─────────────────────────────────────────
+    # ── Llamada a IA con streaming ─────────────────────────────────────────────
     if analyze:
         st.session_state.pop(analysis_key, None)
 
-        thinking_msg  = st.info(f"⏳ {_prov_lbl} está analizando los datos… (15-40 segundos)")
-        result_holder = st.empty()
-        full_text     = ""
+        thinking_ph = st.empty()
+        thinking_ph.info(f"⏳ {_prov_lbl} está analizando los datos… (15-40 segundos)")
+        full_text = ""
 
         try:
             for chunk in _stream_analysis(prompt):
-                if not full_text:
-                    thinking_msg.empty()
                 full_text += chunk
-                result_holder.markdown(full_text + "▌")
+                thinking_ph.info(f"✍️ Generando análisis… {len(full_text)} caracteres")
 
-            result_holder.markdown(full_text)
+            thinking_ph.empty()
             st.session_state[analysis_key] = full_text
+            st.rerun()
 
         except Exception as e:
-            thinking_msg.empty()
-            result_holder.empty()
+            thinking_ph.empty()
             st.error(f"Error al conectar con {_prov_lbl}: {e}")
             return
 
@@ -318,5 +316,5 @@ def show_insights():
                 use_container_width=True,
             )
         with col_prompt:
-            with st.expander("Ver prompt enviado a Claude"):
+            with st.expander(f"Ver prompt enviado a {_prov_lbl}"):
                 st.code(prompt, language="text")

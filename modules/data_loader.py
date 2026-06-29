@@ -190,7 +190,7 @@ def _linkedin_extra_sheets(file_obj, marca, archivo, skip):
         if seg_sheet:
             try:
                 file_obj.seek(0)
-                rows = parse_linkedin_seguidores(file_obj)
+                rows = parse_linkedin_seguidores(file_obj, sheet_name=seg_sheet)
                 _tag_rows(rows, marca, 'LinkedIn', archivo)
                 save_metricas_bulk(rows)
                 extra += f'\n   ↳ Pestaña **{seg_sheet}**: {len(rows)} registros de seguidores'

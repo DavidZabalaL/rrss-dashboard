@@ -43,6 +43,8 @@ def show_analista():
     col_periodo, col_metrica = st.columns([2, 2])
     with col_periodo:
         todo_periodo = st.checkbox("Todo el año", value=False, key="anal_todo")
+        if todo_periodo:
+            st.caption(f"Mostrando todo {año}")
     with col_metrica:
         metrica_rank = st.selectbox(
             "Ordenar por",
@@ -105,6 +107,23 @@ def show_analista():
             apply_layout(fig, height=320)
             fig.update_layout(showlegend=True)
             st.plotly_chart(fig, use_container_width=True)
+
+    # ── Exportar tabla ────────────────────────────────────────────────────────
+    export_cols = [c for c in ['fecha', 'tipo', 'titulo', 'impresiones', 'reacciones',
+                               'comentarios', 'clics', 'tasa_interaccion', 'url']
+                   if c in df.columns]
+    export_df = df[export_cols].copy()
+    if 'fecha' in export_df.columns:
+        export_df['fecha'] = export_df['fecha'].astype(str).str[:10]
+    periodo_lbl_file = f"{año}" if todo_periodo else f"{mes_nombre(mes)}{año}"
+    st.download_button(
+        f"📥 Descargar tabla ({len(df)} posts)",
+        data=export_df.to_csv(index=False).encode('utf-8'),
+        file_name=f"Analista_{marca_nombre.replace(' ','_')}_{red}_{periodo_lbl_file}.csv",
+        mime="text/csv",
+        use_container_width=False,
+        key="btn_analista_export",
+    )
 
     # ── Scatter Impresiones vs Tasa ───────────────────────────────────────────
     if 'impresiones' in df.columns and 'tasa_interaccion' in df.columns:

@@ -1402,11 +1402,12 @@ def _composite_carousel_slide(img_bytes, numero, total, titulo, subtitulo, tipo,
 
     max_txt_w = PANEL - PAD_X * 2   # ~388 px
 
-    # Logo
+    # Logo — only advance y_cursor if logo rendered successfully
     brand_id  = brand.get('brand_id', '')
     logo_path = ROOT / 'marca' / brand_id / 'logos' / 'color.png'
     y_cursor  = PAD_T
     LOGO_H    = 64
+    _logo_ok  = False
     if logo_path.exists():
         try:
             logo = Image.open(logo_path).convert('RGBA')
@@ -1414,9 +1415,11 @@ def _composite_carousel_slide(img_bytes, numero, total, titulo, subtitulo, tipo,
             logo = logo.resize((lw, LOGO_H), Image.LANCZOS)
             canvas.paste(logo, (PAD_X, y_cursor), logo)
             draw = ImageDraw.Draw(canvas)
+            _logo_ok = True
         except Exception:
             pass
-    y_cursor += LOGO_H + 50
+    if _logo_ok:
+        y_cursor += LOGO_H + 50
 
     # Slide number for slides 2 and beyond
     if numero > 1:
@@ -2392,7 +2395,8 @@ def _github_sync_db():
         _req('PATCH', f"{api}/git/refs/heads/{branch}", {"sha": new_commit})
         st.session_state['_db_synced_md5'] = db_md5
         return True
-    except Exception:
+    except Exception as _sync_err:
+        st.warning(f"⚠️ No se pudo sincronizar con GitHub: {_sync_err}", icon="☁️")
         return False
 
 
@@ -4334,13 +4338,20 @@ def show_parrilla():
                         f"🎨 Generar {_car_n} slides",
                         type="primary", use_container_width=True, key="btn_car_gen",
                     ):
-                        st.session_state.pop(_car_imgs_key, None)
+                        # Preservar progreso previo si existe (permite retomar tras fallo)
+                        _car_imgs  = st.session_state.get(_car_imgs_key, [])
+                        _done_nums = {s['numero'] for s in _car_imgs if s.get('bytes')}
                         _master    = _CAROUSEL_MASTER_PROMPTS.get(_car_style, '')
-                        _car_imgs  = []
                         _cprog     = st.progress(0, text="Iniciando…")
                         _cerr_ph   = st.empty()
 
                         for _ci, _sl in enumerate(_car_slides):
+                            if _sl['numero'] in _done_nums:
+                                _cprog.progress(
+                                    (_ci + 1) / _car_n,
+                                    text=f"Slide {_sl['numero']}/{_car_n} — ya generado, omitiendo…"
+                                )
+                                continue
                             _cprog.progress(
                                 _ci / _car_n,
                                 text=f"Slide {_sl['numero']}/{_car_n} — {_sl.get('titulo_slide','')[:45]}…"
@@ -4357,17 +4368,23 @@ def show_parrilla():
                                     _sl.get('tipo', ''),
                                     brand,
                                 )
+                                _car_imgs = [s for s in _car_imgs if s['numero'] != _sl['numero']]
                                 _car_imgs.append({
                                     'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
                                     'titulo': _sl.get('titulo_slide',''), 'bytes': _sb,
                                 })
+                                # Guardar progreso parcial inmediatamente
+                                st.session_state[_car_imgs_key] = sorted(
+                                    _car_imgs, key=lambda x: x['numero'])
                             except Exception as _ge:
                                 _cerr_ph.warning(f"Slide {_sl['numero']} falló: {_ge}")
-                                _car_imgs.append({
-                                    'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
-                                    'titulo': _sl.get('titulo_slide',''), 'bytes': None,
-                                })
+                                if not any(s['numero'] == _sl['numero'] for s in _car_imgs):
+                                    _car_imgs.append({
+                                        'numero': _sl['numero'], 'tipo': _sl.get('tipo',''),
+                                        'titulo': _sl.get('titulo_slide',''), 'bytes': None,
+                                    })
 
+                        _car_imgs = sorted(_car_imgs, key=lambda x: x['numero'])
                         _ok_count = len([s for s in _car_imgs if s['bytes']])
                         _cprog.progress(1.0, text=f"✅ {_ok_count}/{_car_n} slides generados")
                         st.session_state[_car_imgs_key] = _car_imgs

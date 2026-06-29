@@ -307,7 +307,8 @@ if not check_login():
 user = get_user()
 
 # ── Nombre Nebula en header ───────────────────────────────────────────────────
-st.markdown("""
+_nebula_color = "rgba(255,255,255,0.82)" if st.session_state.get('dark_mode', True) else "#1a2d42"
+st.markdown(f"""
 <div style="
   text-align: center;
   padding: 4px 0 8px;
@@ -315,7 +316,7 @@ st.markdown("""
   font-family: 'Courier New', monospace;
   font-size: 2.8rem;
   font-weight: 300;
-  color: rgba(255,255,255,0.82);
+  color: {_nebula_color};
 ">NEBULA</div>
 """, unsafe_allow_html=True)
 
@@ -451,33 +452,38 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Selector de motor IA
-    st.markdown(
-        "<div style='color:#5b8db8;font-size:.7rem;font-weight:600;"
-        "text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;'>"
-        "🤖 Motor IA</div>",
-        unsafe_allow_html=True,
-    )
-    _prov_opts  = ['🟢 Gemini (gratis)', '🔷 Claude']
-    _prov_map   = {'🟢 Gemini (gratis)': 'gemini', '🔷 Claude': 'claude'}
-    _prov_rev   = {v: k for k, v in _prov_map.items()}
-    _prov_cur   = _prov_rev.get(st.session_state.ai_provider, '🟢 Gemini (gratis)')
-    _prov_sel   = st.radio(
-        "Motor IA",
-        _prov_opts,
-        index=_prov_opts.index(_prov_cur),
-        label_visibility="collapsed",
-        key="radio_ai_provider",
-    )
-    st.session_state.ai_provider = _prov_map[_prov_sel]
+    # Selector de motor IA (solo roles con acceso a IA)
+    if user.get('role') != 'visita':
+        st.markdown(
+            "<div style='color:#5b8db8;font-size:.7rem;font-weight:600;"
+            "text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;'>"
+            "🤖 Motor IA</div>",
+            unsafe_allow_html=True,
+        )
+        _prov_opts  = ['🟢 Gemini (gratis)', '🔷 Claude']
+        _prov_map   = {'🟢 Gemini (gratis)': 'gemini', '🔷 Claude': 'claude'}
+        _prov_rev   = {v: k for k, v in _prov_map.items()}
+        _prov_cur   = _prov_rev.get(st.session_state.ai_provider, '🟢 Gemini (gratis)')
+        _prov_sel   = st.radio(
+            "Motor IA",
+            _prov_opts,
+            index=_prov_opts.index(_prov_cur),
+            label_visibility="collapsed",
+            key="radio_ai_provider",
+        )
+        st.session_state.ai_provider = _prov_map[_prov_sel]
+        st.markdown("---")
 
     st.markdown("---")
-    import subprocess as _sp
-    try:
-        _commit = _sp.check_output(['git','rev-parse','--short','HEAD'],
-                                   cwd=str(ROOT), text=True).strip()
-    except Exception:
-        _commit = 'n/a'
+    @st.cache_data(ttl=3600)
+    def _get_commit():
+        import subprocess as _sp
+        try:
+            return _sp.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                    cwd=str(ROOT), text=True).strip()
+        except Exception:
+            return 'n/a'
+
     def _app_load_keys():
         env_path = ROOT / '.env'
         if env_path.exists():
@@ -499,7 +505,7 @@ with st.sidebar:
     st.markdown(
         f"<div style='color:#5b8db8;font-size:.72rem;'>"
         f"👤 {user.get('nombre','—')} · {user.get('role','').title()}<br>"
-        f"<span style='font-family:monospace'>v {_commit}<br>{_api_lbl}</span></div>",
+        f"<span style='font-family:monospace'>v {_get_commit()}<br>{_api_lbl}</span></div>",
         unsafe_allow_html=True,
     )
     if st.button("🚪 Cerrar sesión", use_container_width=True, key="logout_btn"):
@@ -510,22 +516,23 @@ with st.sidebar:
         st.markdown("---")
         with st.expander("🔐 Accesos"):
             from database import get_usuarios_lista as _get_lista
-            _RLABEL = {'admin': '🛡️', 'uploader': '📁', 'viewer': '👁️'}
+            _RLABEL = {'admin': '🛡️ Admin', 'uploader': '📁 Importar',
+                       'viewer': '👁️ Lectura', 'visita': '👤 Visita'}
             st.markdown(
-                "<div style='display:grid;grid-template-columns:1fr 1fr 32px;"
+                "<div style='display:grid;grid-template-columns:1fr 1fr;"
                 "gap:4px;font-size:.7rem;font-weight:700;color:#5b8db8;"
                 "padding:4px 2px;border-bottom:2px solid rgba(100,140,200,.3);'>"
-                "<span>Usuario</span><span>Contraseña</span><span></span></div>",
+                "<span>Usuario</span><span>Rol</span></div>",
                 unsafe_allow_html=True,
             )
             for _u in _get_lista():
                 st.markdown(
-                    f"<div style='display:grid;grid-template-columns:1fr 1fr 32px;"
+                    f"<div style='display:grid;grid-template-columns:1fr 1fr;"
                     f"gap:4px;font-size:.78rem;padding:5px 2px;"
                     f"border-bottom:1px solid rgba(100,100,100,.12);align-items:center;'>"
                     f"<span style='font-weight:600;'>{_u['username']}</span>"
-                    f"<span style='font-family:monospace;color:#1e90ff;'>{_u['password']}</span>"
-                    f"<span style='font-size:.85rem;'>{_RLABEL.get(_u['role'],'👤')}</span>"
+                    f"<span style='color:#5b8db8;font-size:.72rem;'>"
+                    f"{_RLABEL.get(_u['role'], _u['role'])}</span>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -545,7 +552,7 @@ _NAV_CON_FILTROS = {
 }
 
 if nav in _NAV_CON_FILTROS:
-    col_lbl, col_red, col_año, col_mes, col_sp, col_btn = st.columns([1.2, 2.2, 1.4, 2.2, 3, 2.2])
+    col_lbl, col_red, col_año, col_mes = st.columns([1.2, 2.2, 1.4, 2.2])
 
     with col_lbl:
         st.markdown("""
@@ -568,14 +575,6 @@ if nav in _NAV_CON_FILTROS:
 
     with col_mes:
         st.selectbox("Mes", list(range(1, 13)), format_func=mes_nombre, key="f_mes")
-
-    with col_btn:
-        st.markdown("<div style='margin-top:29px;'>", unsafe_allow_html=True)
-        if user.get('role') in ('admin', 'uploader'):
-            if st.button("📁 Importar Datos", use_container_width=True, key="btn_importar_top"):
-                st.session_state._nav_pending = "📁  Importar Datos"
-                st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 

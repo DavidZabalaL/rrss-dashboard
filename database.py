@@ -248,7 +248,7 @@ def save_contenido_posts(rows):
 
 
 def get_contenido_posts(marca, red, año, mes=None):
-    if mes:
+    if mes is not None:
         sql = """SELECT * FROM contenido_posts
                  WHERE marca=? AND red=? AND strftime('%Y',fecha)=? AND strftime('%m',fecha)=?
                  ORDER BY fecha DESC"""

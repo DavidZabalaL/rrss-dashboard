@@ -150,12 +150,13 @@ def parse_linkedin_metricas(file_obj, sheet_name=None):
 
 # ── LinkedIn seguidores ───────────────────────────────────────────────────────
 
-def parse_linkedin_seguidores(file_obj):
+def parse_linkedin_seguidores(file_obj, sheet_name=None):
     """
     Export de seguidores LinkedIn. Encabezados en fila 0.
     Fechas en formato MM/DD/YYYY → dayfirst=False.
     """
-    df = pd.read_excel(file_obj, header=0, engine='openpyxl')
+    kw = {'sheet_name': sheet_name} if sheet_name else {}
+    df = pd.read_excel(file_obj, header=0, engine='openpyxl', **kw)
     df.columns = [str(c).strip() for c in df.columns]
 
     date_col = _find_col(df, ['fecha', 'date'])

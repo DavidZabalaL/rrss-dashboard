@@ -84,21 +84,6 @@ def show_dashboard():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Resumen métricas del mes ───────────────────────────────────────────────
-    st.markdown(f"#### 📋 Resumen — {red} · {mes_nombre(mes)} {año}")
-    resumen_keys = [m['key'] for m in metricas_red if m['key'] in reales]
-    if resumen_keys:
-        rcols = st.columns(min(len(resumen_keys), 4))
-        for i, key in enumerate(resumen_keys[:4]):
-            m = next((x for x in metricas_red if x['key'] == key), None)
-            if m:
-                rcols[i].metric(
-                    f"{m['icon']} {m['label']}",
-                    fmt_num(reales.get(key, 0)),
-                )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
     # ── Tendencia histórica ────────────────────────────────────────────────────
     hist_df = get_metricas_historico_mensual(marca_nombre, red)
     if not hist_df.empty:
