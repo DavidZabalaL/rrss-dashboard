@@ -29,8 +29,8 @@ def show_uploader():
       📁 Importar Datos — {marca_nombre}
     </h2>
     <p style="color:#5b8db8;font-size:.85rem;margin-top:0;">
-      Sube archivos Excel de las redes sociales. Nomenclatura recomendada:
-      <code>k1_linkedin.xlsx</code> · <code>k1_contenido.xlsx</code> · <code>sym_facebook.xlsx</code>
+      Sube archivos Excel de las redes sociales. El prefijo <code>k1_</code> o <code>sym_</code>
+      identifica la marca automáticamente; si no lo llevan, se asignan a la marca activa.
     </p>
     """, unsafe_allow_html=True)
 
@@ -231,49 +231,53 @@ def _guess_metrica_instagram(filename):
 
 
 def _show_guide():
-    st.markdown("#### 📖 Nomenclatura de archivos")
+    st.markdown("#### 📖 Archivos que se usan")
+    st.caption(
+        "El prefijo `k1_` o `sym_` asigna la marca automáticamente. "
+        "Sin prefijo, el archivo se asocia a la marca seleccionada arriba."
+    )
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("""
-**Métricas diarias**
+**LinkedIn — Kabat One**
 
-| Archivo | Métrica |
+| Archivo | Contenido |
 |---|---|
-| `k1_linkedin_impresiones.xlsx` | Impresiones + Alcance + Reacciones + Comentarios |
-| `k1_linkedin_incremento_seguidores.xlsx` | Nuevos seguidores LinkedIn |
-| `k1_facebook_visualizaciones.xlsx` | Visualizaciones Facebook |
-| `k1_facebook_incremento_seguidores.xlsx` | Nuevos seguidores Facebook |
-| `k1_facebook_interaccion.xlsx` | Interacciones Facebook |
-| `k1_facebook_visitas.xlsx` | Visitas Facebook |
-| `k1_instagram_visualizaciones.xlsx` | Visualizaciones Instagram |
-| `k1_instagram_incremento_seguidores.xlsx` | Nuevos seguidores Instagram |
-| `k1_instagram_interaccion.xlsx` | Interacciones Instagram |
-| `k1_instagram_visitas.xlsx` | Visitas Instagram |
+| `k1_linkedin.xlsx` | **Un solo archivo** con todas las métricas: Impresiones, Alcance, Reacciones, Comentarios y Nuevos seguidores |
+| `k1_contenido_linkedin.xlsx` | Publicaciones individuales (engagement por post) |
 
-> Sustituye `k1_` por `sym_` para archivos de SYM.
+> El export de LinkedIn Analytics ya incluye todas las métricas en un solo archivo.
+> No necesitas archivos separados por métrica.
+
+**SYM — mismo patrón con `sym_`**
+
+| Archivo |
+|---|
+| `sym_linkedin.xlsx` |
+| `sym_contenido_linkedin.xlsx` |
         """)
 
     with col2:
         st.markdown("""
-**Contenido (publicaciones)**
+**Facebook — Kabat One**
 
-| Archivo | Descripción |
+Meta Business Suite exporta una métrica por archivo:
+
+| Archivo | Métrica |
 |---|---|
-| `k1_contenido_linkedin.xlsx` | Posts LinkedIn Kabat One |
-| `k1_contenido_facebook.xlsx` | Posts Facebook Kabat One |
-| `k1_contenido_instagram.xlsx` | Posts Instagram Kabat One |
-| `sym_contenido_linkedin.xlsx` | Posts LinkedIn SYM |
-| `sym_contenido_facebook.xlsx` | Posts Facebook SYM |
-| `sym_contenido_instagram.xlsx` | Posts Instagram SYM |
+| `k1_facebook_visualizaciones.xlsx` | Visualizaciones de video |
+| `k1_facebook_incremento_seguidores.xlsx` | Nuevos seguidores |
+| `k1_facebook_interaccion.xlsx` | Interacciones |
+| `k1_facebook_visitas.xlsx` | Visitas a la página |
 
-**Formato por tipo de archivo:**
+> Sustituye `k1_` por `sym_` para Facebook de SYM.
 
-| Tipo | Origen |
+**Origen de los archivos**
+
+| Red | Fuente del export |
 |---|---|
-| LinkedIn métricas | Export LinkedIn Analytics |
-| LinkedIn contenido | Export LinkedIn Analytics → Publicaciones |
-| Facebook / Instagram métricas | Export Meta Business Suite (CSV → xlsx) |
-| Facebook / Instagram contenido | Export Meta Business Suite → Publicaciones |
+| LinkedIn | LinkedIn Analytics → Exportar métricas |
+| Facebook | Meta Business Suite → Exportar datos |
         """)

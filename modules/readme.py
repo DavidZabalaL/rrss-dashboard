@@ -562,16 +562,18 @@ La IA genera la imagen base que luego puedes editar con logo, pleca y ajustes.
     # ══════════════════════════════════════════════════════════════════════════
     # 11. NOMENCLATURA
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("11 · Nomenclatura completa de archivos"):
+    with st.expander("11 · Archivos que se usan"):
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("""
 **KABAT ONE — LinkedIn**
 ```
-k1_linkedin_impresiones.xlsx
-k1_linkedin_incremento_seguidores.xlsx
+k1_linkedin.xlsx
 k1_contenido_linkedin.xlsx
 ```
+LinkedIn exporta **un solo archivo** con todas las métricas
+(Impresiones, Alcance, Reacciones, Comentarios, Nuevos seguidores).
+No necesitas archivos separados por métrica.
 
 **KABAT ONE — Facebook**
 ```
@@ -579,24 +581,14 @@ k1_facebook_visualizaciones.xlsx
 k1_facebook_incremento_seguidores.xlsx
 k1_facebook_interaccion.xlsx
 k1_facebook_visitas.xlsx
-k1_contenido_facebook.xlsx
 ```
-
-**KABAT ONE — Instagram**
-```
-k1_instagram_visualizaciones.xlsx
-k1_instagram_incremento_seguidores.xlsx
-k1_instagram_interaccion.xlsx
-k1_instagram_visitas.xlsx
-k1_contenido_instagram.xlsx
-```
+Meta Business Suite exporta una métrica por archivo.
             """)
         with col2:
             st.markdown("""
 **SYM — LinkedIn**
 ```
-sym_linkedin_impresiones.xlsx
-sym_linkedin_incremento_seguidores.xlsx
+sym_linkedin.xlsx
 sym_contenido_linkedin.xlsx
 ```
 
@@ -606,24 +598,16 @@ sym_facebook_visualizaciones.xlsx
 sym_facebook_incremento_seguidores.xlsx
 sym_facebook_interaccion.xlsx
 sym_facebook_visitas.xlsx
-sym_contenido_facebook.xlsx
-```
-
-**SYM — Instagram**
-```
-sym_instagram_visualizaciones.xlsx
-sym_instagram_incremento_seguidores.xlsx
-sym_instagram_interaccion.xlsx
-sym_instagram_visitas.xlsx
-sym_contenido_instagram.xlsx
 ```
             """)
         st.info("""
 **Reglas generales:**
 - Todo en minúsculas, sin acentos, separado por `_`
-- Extensión siempre `.xlsx` (no `.csv`, no `.xls`)
-- Una métrica por archivo
-- El prefijo `k1_` o `sym_` determina la marca automáticamente
+- Extensión `.xlsx`
+- El prefijo `k1_` o `sym_` asigna la marca automáticamente.
+  Sin prefijo, el archivo se asigna a la marca activa en la app.
+- **LinkedIn**: un archivo ya trae todas las métricas — no subas archivos separados por métrica.
+- **Facebook**: Meta exporta una métrica por archivo — sube uno por cada tipo.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -662,7 +646,7 @@ de datos para el mes y red seleccionados.
 Si Meta te entrega un `.csv`, conviértelo antes de subir:
 1. Abre el `.csv` en Excel o Google Sheets
 2. Archivo → Guardar como → `.xlsx`
-3. Renombra siguiendo la nomenclatura (`k1_instagram_visitas.xlsx`)
+3. Renombra siguiendo la nomenclatura (`k1_facebook_visitas.xlsx`)
         """)
 
     st.markdown("---")
