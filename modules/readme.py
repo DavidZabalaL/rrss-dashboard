@@ -566,48 +566,45 @@ La IA genera la imagen base que luego puedes editar con logo, pleca y ajustes.
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("""
-**KABAT ONE — LinkedIn**
+**LinkedIn** (un archivo trae todas las métricas)
 ```
-k1_linkedin.xlsx
+k1_linkedin.xlsx          →  Kabat One
+sym_linkedin.xlsx         →  SYM
+```
+```
 k1_contenido_linkedin.xlsx
+sym_contenido_linkedin.xlsx
 ```
-LinkedIn exporta **un solo archivo** con todas las métricas
-(Impresiones, Alcance, Reacciones, Comentarios, Nuevos seguidores).
-No necesitas archivos separados por métrica.
 
-**KABAT ONE — Facebook**
+**Facebook** (Meta exporta una métrica por archivo)
 ```
 k1_facebook_visualizaciones.xlsx
 k1_facebook_incremento_seguidores.xlsx
 k1_facebook_interaccion.xlsx
 k1_facebook_visitas.xlsx
 ```
-Meta Business Suite exporta una métrica por archivo.
+Mismo patrón con `sym_` para SYM.
             """)
         with col2:
             st.markdown("""
-**SYM — LinkedIn**
+**Instagram** (Meta exporta una métrica por archivo)
 ```
-sym_linkedin.xlsx
-sym_contenido_linkedin.xlsx
+k1_instagram_visualizaciones.xlsx
+k1_instagram_incremento_seguidores.xlsx
+k1_instagram_interaccion.xlsx
+k1_instagram_visitas.xlsx
 ```
+Mismo patrón con `sym_` para SYM.
 
-**SYM — Facebook**
-```
-sym_facebook_visualizaciones.xlsx
-sym_facebook_incremento_seguidores.xlsx
-sym_facebook_interaccion.xlsx
-sym_facebook_visitas.xlsx
-```
+> **Alcance Instagram**: se captura manualmente en el Monitor de KPIs.
+> No se importa por archivo.
             """)
         st.info("""
-**Reglas generales:**
-- Todo en minúsculas, sin acentos, separado por `_`
-- Extensión `.xlsx`
-- El prefijo `k1_` o `sym_` asigna la marca automáticamente.
-  Sin prefijo, el archivo se asigna a la marca activa en la app.
-- **LinkedIn**: un archivo ya trae todas las métricas — no subas archivos separados por métrica.
-- **Facebook**: Meta exporta una métrica por archivo — sube uno por cada tipo.
+**Reglas:**
+- Todo en minúsculas, sin acentos, separado por `_` · Extensión `.xlsx`
+- El prefijo `k1_` o `sym_` asigna la marca automáticamente. Sin prefijo → marca activa en la app.
+- **LinkedIn**: un solo archivo ya trae todas las métricas — no necesitas archivos separados por métrica.
+- **Facebook / Instagram**: Meta exporta una métrica por archivo — sube uno por cada tipo.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════

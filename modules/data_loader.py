@@ -241,29 +241,19 @@ def _show_guide():
 
     with col1:
         st.markdown("""
-**LinkedIn — Kabat One**
+**LinkedIn** · `k1_` para Kabat One · `sym_` para SYM
 
 | Archivo | Contenido |
 |---|---|
-| `k1_linkedin.xlsx` | **Un solo archivo** con todas las métricas: Impresiones, Alcance, Reacciones, Comentarios y Nuevos seguidores |
+| `k1_linkedin.xlsx` | **Un archivo** con todas las métricas: Impresiones, Alcance, Reacciones, Comentarios, Nuevos seguidores |
 | `k1_contenido_linkedin.xlsx` | Publicaciones individuales (engagement por post) |
 
-> El export de LinkedIn Analytics ya incluye todas las métricas en un solo archivo.
+> LinkedIn Analytics exporta todas las métricas en un solo archivo.
 > No necesitas archivos separados por métrica.
 
-**SYM — mismo patrón con `sym_`**
+---
 
-| Archivo |
-|---|
-| `sym_linkedin.xlsx` |
-| `sym_contenido_linkedin.xlsx` |
-        """)
-
-    with col2:
-        st.markdown("""
-**Facebook — Kabat One**
-
-Meta Business Suite exporta una métrica por archivo:
+**Facebook** · una métrica por archivo (así lo exporta Meta)
 
 | Archivo | Métrica |
 |---|---|
@@ -272,12 +262,31 @@ Meta Business Suite exporta una métrica por archivo:
 | `k1_facebook_interaccion.xlsx` | Interacciones |
 | `k1_facebook_visitas.xlsx` | Visitas a la página |
 
-> Sustituye `k1_` por `sym_` para Facebook de SYM.
+> Sustituye `k1_` por `sym_` para SYM.
+        """)
+
+    with col2:
+        st.markdown("""
+**Instagram** · una métrica por archivo (así lo exporta Meta)
+
+| Archivo | Métrica |
+|---|---|
+| `k1_instagram_visualizaciones.xlsx` | Visualizaciones |
+| `k1_instagram_incremento_seguidores.xlsx` | Nuevos seguidores |
+| `k1_instagram_interaccion.xlsx` | Interacciones |
+| `k1_instagram_visitas.xlsx` | Visitas al perfil |
+
+> **Alcance Instagram**: se captura manualmente en el Monitor de KPIs,
+> no por archivo — Meta no lo exporta de forma diaria confiable.
+
+> Sustituye `k1_` por `sym_` para SYM.
+
+---
 
 **Origen de los archivos**
 
-| Red | Fuente del export |
+| Red | Fuente |
 |---|---|
-| LinkedIn | LinkedIn Analytics → Exportar métricas |
-| Facebook | Meta Business Suite → Exportar datos |
+| LinkedIn | LinkedIn Analytics → Exportar |
+| Facebook / Instagram | Meta Business Suite → Exportar datos |
         """)
