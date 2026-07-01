@@ -1,5 +1,6 @@
 # parsers.py — Detección y parseo de archivos CSV/Excel
 
+import warnings
 import pandas as pd
 from pathlib import Path
 from config import MARCAS, LINKEDIN_COL_MAP
@@ -137,6 +138,13 @@ def parse_linkedin_metricas(file_obj, sheet_name=None):
     rows = []
     for metrica_key, col_nombre in LINKEDIN_COL_MAP.items():
         match = next((c for c in df.columns if col_nombre.lower() in c.lower()), None)
+        if not match:
+            warnings.warn(
+                f"parse_linkedin_metricas: columna '{col_nombre}' no encontrada "
+                f"(métrica '{metrica_key}' omitida).",
+                UserWarning,
+                stacklevel=2,
+            )
         if match:
             serie = pd.to_numeric(df[match], errors='coerce').fillna(0)
             for fecha, valor in zip(df[date_col], serie):
@@ -156,7 +164,8 @@ def parse_linkedin_seguidores(file_obj, sheet_name=None):
     Fechas en formato MM/DD/YYYY → dayfirst=False.
     """
     kw = {'sheet_name': sheet_name} if sheet_name else {}
-    df = pd.read_excel(file_obj, header=0, engine='openpyxl', **kw)
+    file_obj.seek(0)
+    df = pd.read_excel(file_obj, header=0, engine=_excel_engine(file_obj), **kw)
     df.columns = [str(c).strip() for c in df.columns]
 
     date_col = _find_col(df, ['fecha', 'date'])
@@ -182,6 +191,7 @@ def parse_instagram(file_obj, metrica_key):
     """Formato similar a Facebook (2 columnas: Fecha + valor)."""
     for skip in (0, 1, 2):
         try:
+            file_obj.seek(0)
             df = pd.read_excel(file_obj, skiprows=skip, header=0, engine='openpyxl')
             df.columns = [str(c).strip() for c in df.columns]
             date_col = _find_col(df, ['fecha', 'date', 'día'])

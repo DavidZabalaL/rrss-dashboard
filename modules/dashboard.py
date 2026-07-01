@@ -8,6 +8,7 @@ from config import METRICAS, COLORS, CHART_COLORS
 from database import (
     get_metricas_mensuales, get_metricas_historico_mensual,
     get_redes_con_datos, get_kpi_objetivos,
+    get_kpi_manual, get_publicaciones_count,
 )
 from utils import (
     fmt_num, fmt_pct, kpi_status, mes_nombre,
@@ -45,10 +46,6 @@ def show_dashboard():
     reales    = get_metricas_mensuales(marca_nombre, red, año, mes)
     objetivos = get_kpi_objetivos(marca_nombre, red, año, mes)
 
-    if not reales:
-        st.warning(f"Sin datos para **{red}** · **{mes_nombre(mes)} {año}**.")
-        return
-
     # Mes anterior para deltas
     mes_ant = mes - 1 if mes > 1 else 12
     año_ant = año if mes > 1 else año - 1
@@ -56,31 +53,45 @@ def show_dashboard():
 
     # ── KPI Cards ──────────────────────────────────────────────────────────────
     metricas_red   = METRICAS.get(red, [])
-    metricas_cards = [m for m in metricas_red
-                      if m['key'] in reales and m['key'] != 'publicaciones'][:4]
 
-    if metricas_cards:
-        dark = st.session_state.get('dark_mode', True)
-        cols = st.columns(len(metricas_cards))
-        for col, m in zip(cols, metricas_cards):
-            real = float(reales.get(m['key'], 0) or 0)
-            prev = float(reales_ant.get(m['key'], 0) or 0)
-            meta = float(objetivos.get(m['key'], 0) or 0)
-            _, color, _ = kpi_status(real, meta)
+    def _get_real(m, reales_dict, año_r, mes_r):
+        """Obtiene el valor real según el tipo de métrica, igual que kpi_monitor."""
+        tipo = m['tipo']
+        key  = m['key']
+        if tipo == 'contenido':
+            return float(get_publicaciones_count(marca_nombre, red, año_r, mes_r))
+        if tipo in ('manual', 'manual_50pct'):
+            return get_kpi_manual(marca_nombre, red, key, año_r, mes_r)
+        return float(reales_dict.get(key, 0) or 0)
 
-            delta = ''
-            if prev:
-                diff  = ((real - prev) / prev) * 100
-                arrow = '▲' if diff >= 0 else '▼'
-                delta = f"{arrow} {abs(diff):.1f}% vs {mes_nombre(mes_ant)}"
+    if not reales:
+        st.warning(f"Sin datos para **{red}** · **{mes_nombre(mes)} {año}**.")
+    else:
+        metricas_cards = [m for m in metricas_red
+                          if m['key'] != 'publicaciones'][:4]
 
-            with col:
-                st.markdown(
-                    metric_card_html(f"{m['icon']} {m['label']}", fmt_num(real),
-                                     delta, color if meta else COLORS['secondary'],
-                                     dark=dark),
-                    unsafe_allow_html=True,
-                )
+        if metricas_cards:
+            dark = st.session_state.get('dark_mode', True)
+            cols = st.columns(len(metricas_cards))
+            for col, m in zip(cols, metricas_cards):
+                real = _get_real(m, reales, año, mes)
+                prev = _get_real(m, reales_ant, año_ant, mes_ant)
+                meta = float(objetivos.get(m['key'], 0) or 0)
+                _, color, _ = kpi_status(real, meta)
+
+                delta = ''
+                if prev:
+                    diff  = ((real - prev) / prev) * 100
+                    arrow = '▲' if diff >= 0 else '▼'
+                    delta = f"{arrow} {abs(diff):.1f}% vs {mes_nombre(mes_ant)}"
+
+                with col:
+                    st.markdown(
+                        metric_card_html(f"{m['icon']} {m['label']}", fmt_num(real),
+                                         delta, color if meta else COLORS['secondary'],
+                                         dark=dark),
+                        unsafe_allow_html=True,
+                    )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -115,7 +126,7 @@ def show_dashboard():
     if not hist_df.empty:
         st.markdown("#### 📊 Comparativa mes a mes — últimos 6 meses")
         top_keys = [m['key'] for m in metricas_red
-                    if m['tipo'] not in ('auto_50pct',) and m['key'] != 'publicaciones'][:4]
+                    if m['tipo'] not in ('manual_50pct',) and m['key'] != 'publicaciones'][:4]
         comp = hist_df[hist_df['metrica'].isin(top_keys)].copy()
         comp['etiqueta'] = comp.apply(
             lambda r: mes_etiqueta(int(r['año']), int(r['mes'])), axis=1
@@ -134,13 +145,13 @@ def show_dashboard():
             st.info("Importa datos de varios meses para ver la comparativa.")
 
     # ── Cumplimiento del mes ───────────────────────────────────────────────────
-    if objetivos:
+    if objetivos and reales:
         st.markdown("#### 🎯 Cumplimiento de KPIs")
         imp_real = float(reales.get('impresiones', 0) or 0)
         vis_real = float(reales.get('visualizaciones', 0) or 0)
         kpi_rows = []
         for m in metricas_red:
-            real = float(reales.get(m['key'], 0) or 0)
+            real = _get_real(m, reales, año, mes)
             if m['tipo'] == 'auto_4pct':
                 meta = round(imp_real * 0.04)
             elif m['tipo'] in ('auto_50pct', 'manual_50pct'):

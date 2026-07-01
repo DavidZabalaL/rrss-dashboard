@@ -6,6 +6,8 @@
 #   GITHUB_DB_PATH = "data/rrss.db"   # ruta dentro del repo
 
 import base64
+import shutil
+import sqlite3
 import requests
 import streamlit as st
 from database import DB_PATH
@@ -61,7 +63,19 @@ def pull():
         return False
     content = base64.b64decode(r.json()["content"].replace("\n", ""))
     DB_PATH.parent.mkdir(exist_ok=True)
+    _bak = DB_PATH.with_suffix('.db.bak')
+    if DB_PATH.exists():
+        shutil.copy2(DB_PATH, _bak)
     DB_PATH.write_bytes(content)
+    # Verificar que la BD descargada es válida; si no, restaurar backup
+    try:
+        _conn = sqlite3.connect(str(DB_PATH))
+        _conn.execute("SELECT 1")
+        _conn.close()
+    except Exception:
+        if _bak.exists():
+            shutil.copy2(_bak, DB_PATH)
+        return False
     return True
 
 
@@ -119,4 +133,44 @@ def push():
     r = requests.patch(f"{api}/git/refs/heads/{_BRANCH}",
                        json={"sha": new_commit_sha},
                        headers=_h(token), timeout=15)
-    return r.status_code in (200, 201)
+    if r.status_code in (200, 201):
+        return True
+
+    # Reintento único si el SHA está desactualizado (conflicto 409/422)
+    if r.status_code in (409, 422):
+        try:
+            pull()  # sincronizar HEAD remoto antes de reintentar
+            # Re-obtener HEAD actualizado
+            r2 = requests.get(f"{api}/git/refs/heads/{_BRANCH}", headers=_h(token), timeout=15)
+            if r2.status_code != 200:
+                return False
+            head_sha2 = r2.json()["object"]["sha"]
+            r3 = requests.get(f"{api}/git/commits/{head_sha2}", headers=_h(token), timeout=15)
+            if r3.status_code != 200:
+                return False
+            tree_sha2 = r3.json()["tree"]["sha"]
+            r4 = requests.post(f"{api}/git/trees",
+                               json={"base_tree": tree_sha2,
+                                     "tree": [{"path": path, "mode": "100644",
+                                               "type": "blob", "sha": blob_sha}]},
+                               headers=_h(token), timeout=30)
+            if r4.status_code not in (200, 201):
+                return False
+            new_tree_sha2 = r4.json()["sha"]
+            r5 = requests.post(f"{api}/git/commits",
+                               json={"message": "sync: update RRSS database",
+                                     "tree": new_tree_sha2,
+                                     "parents": [head_sha2],
+                                     "committer": {"name": "RRSS Bot", "email": "bot@rrss.local"}},
+                               headers=_h(token), timeout=30)
+            if r5.status_code not in (200, 201):
+                return False
+            new_commit_sha2 = r5.json()["sha"]
+            r6 = requests.patch(f"{api}/git/refs/heads/{_BRANCH}",
+                                json={"sha": new_commit_sha2},
+                                headers=_h(token), timeout=15)
+            return r6.status_code in (200, 201)
+        except Exception:
+            return False
+
+    return False

@@ -1,5 +1,6 @@
 # utils.py — Helpers de UI y formato
 
+import math
 import plotly.graph_objects as go
 from config import COLORS, CHART_COLORS
 
@@ -21,10 +22,14 @@ def mes_etiqueta(año, mes):
 def fmt_num(v):
     try:
         v = float(v)
-        if v >= 1_000_000:
-            return f"{v/1_000_000:.1f}M"
-        if v >= 1_000:
-            return f"{v/1_000:.1f}K"
+        if math.isnan(v):
+            return "—"
+        sign = '-' if v < 0 else ''
+        a = abs(v)
+        if a >= 1_000_000:
+            return f"{sign}{a/1_000_000:.1f}M"
+        if a >= 1_000:
+            return f"{sign}{a/1_000:.1f}K"
         if v == int(v):
             return f"{int(v):,}"
         return f"{v:.1f}"
@@ -41,6 +46,7 @@ def fmt_pct(v):
 
 def kpi_status(real, meta):
     """Returns (emoji, color, pct)."""
+    real = float(real or 0)
     if not meta:
         return '⚪', COLORS['muted'], 0.0
     pct = (real / meta) * 100

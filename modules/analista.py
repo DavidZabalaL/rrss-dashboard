@@ -20,6 +20,11 @@ _METRIC_LABELS = {
 
 
 def show_analista():
+    _role = st.session_state.get('current_user', {}).get('role', 'visita')
+    if _role == 'visita':
+        st.warning("⛔ Vista no disponible en modo lectura.")
+        return
+
     marca        = st.session_state.get('marca_activa', 'k1')
     marca_nombre = 'Kabat One' if marca == 'k1' else 'SYM'
     red  = st.session_state.get('f_red', 'LinkedIn')
@@ -83,14 +88,20 @@ def show_analista():
 
     # ── Top 5 ─────────────────────────────────────────────────────────────────
     st.markdown("#### 🏆 Top 5 — Mejores publicaciones")
-    _show_posts_table(df.head(5))
+    df_top5 = df.head(5)
+    _show_posts_table(df_top5)
 
     # ── Bottom 5 ──────────────────────────────────────────────────────────────
     st.markdown("#### 📉 Bottom 5 — Menor desempeño")
-    bottom = df.tail(5)
-    if metrica_rank in bottom.columns:
-        bottom = bottom.sort_values(metrica_rank)
-    _show_posts_table(bottom)
+    top_indices = set(df_top5.index)
+    df_remaining = df.drop(index=top_indices)
+    if not df_remaining.empty:
+        bottom = df_remaining.nsmallest(5, metrica_rank) if metrica_rank in df_remaining.columns else df_remaining.tail(5)
+        if metrica_rank in bottom.columns:
+            bottom = bottom.sort_values(metrica_rank)
+        _show_posts_table(bottom)
+    else:
+        st.caption("No hay publicaciones adicionales fuera del Top 5.")
 
     # ── Distribución por tipo ─────────────────────────────────────────────────
     if 'tipo' in df.columns and df['tipo'].notna().any() and metrica_rank in df.columns:

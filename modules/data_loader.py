@@ -204,6 +204,7 @@ def _guess_metrica_facebook(filename):
     stem = filename.lower()
     mapping = {
         'visualizaciones': 'visualizaciones', 'views': 'visualizaciones',
+        'vis_seguidores': 'vis_seguidores', 'vis_no_seguidores': 'vis_no_seguidores',
         'seguidores': 'incremento_seguidores', 'followers': 'incremento_seguidores',
         'interaccion': 'interaccion', 'engagement': 'interaccion',
         'visitas': 'visitas', 'visits': 'visitas',
@@ -219,6 +220,7 @@ def _guess_metrica_instagram(filename):
     stem = filename.lower()
     mapping = {
         'visualizaciones': 'visualizaciones', 'views': 'visualizaciones',
+        'vis_seguidores': 'vis_seguidores', 'vis_no_seguidores': 'vis_no_seguidores',
         'seguidores': 'incremento_seguidores', 'followers': 'incremento_seguidores',
         'alcance': 'alcance', 'reach': 'alcance',
         'interaccion': 'interaccion', 'engagement': 'interaccion',

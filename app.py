@@ -296,7 +296,9 @@ seed_usuarios()
 import sync as _sync
 if _sync.github_configured() and 'github_pulled' not in st.session_state:
     with st.spinner("Sincronizando datos con GitHub…"):
-        _sync.pull()
+        _pull_ok = _sync.pull()
+    if not _pull_ok:
+        st.warning("⚠️ No se pudo sincronizar con GitHub. Trabajando con datos locales.")
     st.session_state.github_pulled = True
 
 # Auth
@@ -371,6 +373,21 @@ años_disp    = list(range(hoy.year + 1, 2022, -1))
 if st.session_state.get('f_año') not in años_disp:
     st.session_state.f_año = años_disp[1]
 
+def _app_load_keys():
+    env_path = ROOT / '.env'
+    if env_path.exists():
+        for _line in env_path.read_text(encoding='utf-8').splitlines():
+            _line = _line.strip()
+            if _line and not _line.startswith('#') and '=' in _line:
+                _k, _, _v = _line.partition('=')
+                os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+    try:
+        for _k, _v in st.secrets.items():
+            if isinstance(_v, str):
+                os.environ.setdefault(_k, _v)
+    except Exception:
+        pass
+
 # ── Sidebar — marca + navegación + usuario ────────────────────────────────────
 with st.sidebar:
     # Logo según marca activa y modo de color
@@ -400,6 +417,8 @@ with st.sidebar:
             for k in ('f_red', 'f_año', 'f_mes',
                       'parrilla_df', 'parrilla_meta', 'parrilla_historial'):
                 st.session_state.pop(k, None)
+            for _k in [k for k in st.session_state if k.startswith('ai_analysis_')]:
+                del st.session_state[_k]
             st.rerun()
     with col_sym:
         if st.button("SYM", use_container_width=True,
@@ -409,6 +428,8 @@ with st.sidebar:
             for k in ('f_red', 'f_año', 'f_mes',
                       'parrilla_df', 'parrilla_meta', 'parrilla_historial'):
                 st.session_state.pop(k, None)
+            for _k in [k for k in st.session_state if k.startswith('ai_analysis_')]:
+                del st.session_state[_k]
             st.rerun()
 
     st.markdown("---")
@@ -484,21 +505,8 @@ with st.sidebar:
         except Exception:
             return 'n/a'
 
-    def _app_load_keys():
-        env_path = ROOT / '.env'
-        if env_path.exists():
-            for _line in env_path.read_text(encoding='utf-8').splitlines():
-                _line = _line.strip()
-                if _line and not _line.startswith('#') and '=' in _line:
-                    _k, _, _v = _line.partition('=')
-                    os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
-        try:
-            for _k, _v in st.secrets.items():
-                if isinstance(_v, str):
-                    os.environ.setdefault(_k, _v)
-        except Exception:
-            pass
     _app_load_keys()
+
     _api_ok  = bool(os.environ.get('ANTHROPIC_API_KEY','').strip())
     _gem_ok  = bool(os.environ.get('GEMINI_API_KEY','').strip())
     _api_lbl = ('✅ Claude' if _api_ok else '❌ Claude') + ' · ' + ('✅ Gemini' if _gem_ok else '❌ Gemini')

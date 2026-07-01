@@ -1131,7 +1131,23 @@ def _edit_imagen_gemini(image_bytes, instruction):
     req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
     resp = urllib.request.urlopen(req, timeout=180)
     data = json.loads(resp.read())
-    parts = data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+    # FIX 8: detectar bloqueo por safety antes del mensaje genérico
+    candidates = data.get('candidates', [])
+    if not candidates:
+        _pf = data.get('promptFeedback', {})
+        if _pf.get('blockReason'):
+            raise RuntimeError(
+                "Gemini bloqueó la imagen por políticas de contenido. "
+                "Prueba con una descripción diferente o usa la opción de edición manual."
+            )
+        raise RuntimeError('El modelo no devolvió imagen editada. Intenta con otra instrucción.')
+    _cand = candidates[0]
+    if _cand.get('finishReason') == 'SAFETY':
+        raise RuntimeError(
+            "Gemini bloqueó la imagen por políticas de contenido. "
+            "Prueba con una descripción diferente o usa la opción de edición manual."
+        )
+    parts = _cand.get('content', {}).get('parts', [])
     for p in parts:
         if 'inlineData' in p:
             raw = base64.b64decode(p['inlineData']['data'])
@@ -2795,10 +2811,15 @@ def _monday_fetch_parrilla(api_key, board_id, marca, año, mes):
         except Exception:
             dia_semana = ''
 
+        # FIX 1: inferir tipo_dia desde el nombre del ítem o del grupo
+        _name_lower = item_name.lower()
+        _special_kw = ('especial', 'efemeride', 'efeméride', 'evento')
+        _tipo_dia   = 'especial' if any(kw in _name_lower for kw in _special_kw) else 'regular'
+
         posts.append({
             'fecha':           fecha,
             'dia_semana':      dia_semana,
-            'tipo_dia':        'regular',
+            'tipo_dia':        _tipo_dia,
             'tema':            tema,
             'pilar':           vals.get('pilar', ''),
             'formato':         vals.get('formato', ''),
@@ -2976,6 +2997,14 @@ def show_parrilla():
     pub_dates          = _pub_dates_in_month(año, mes, dias_pub)
     prev_año, prev_mes = _prev_month(año, mes)
 
+    # FIX 7: limpiar parrilla si el mes/año seleccionado difiere del que está en sesión
+    _meta_año = st.session_state.get('parrilla_meta', {}).get('año')
+    _meta_mes = st.session_state.get('parrilla_meta', {}).get('mes')
+    if _meta_año and _meta_mes and (_meta_año != año or _meta_mes != mes):
+        st.session_state.pop('parrilla_df', None)
+        st.session_state.pop('parrilla_meta', None)
+        st.session_state.pop('parrilla_historial', None)
+
     if not pub_dates:
         st.warning(f"No hay días de publicación en {MESES_ES[mes]} {año}. "
                    f"Días configurados: {', '.join(dias_pub)}")
@@ -3041,6 +3070,9 @@ def show_parrilla():
                             'con_insights': False, 'insights_mes': '', 'brand': brand,
                         }
                         st.session_state[_auto_key] = True
+                        # FIX 2: limpiar diffs del editor antes de rerun
+                        for _ek in [k for k in st.session_state if k.startswith('parrilla_compact')]:
+                            del st.session_state[_ek]
                         st.rerun()
                     else:
                         st.session_state[_auto_key] = True  # mark as tried so we don't loop
@@ -3086,6 +3118,9 @@ def show_parrilla():
                                     'con_insights': False, 'insights_mes': '', 'brand': brand,
                                 }
                                 st.success(f"✅ {len(_rp)} publicaciones recuperadas desde Monday.com.")
+                                # FIX 3: limpiar diffs del editor antes de rerun
+                                for _ek in [k for k in st.session_state if k.startswith('parrilla_compact')]:
+                                    del st.session_state[_ek]
                                 st.rerun()
                         except Exception as _re:
                             st.error(f"Error al recuperar: {_re}")
@@ -3178,7 +3213,11 @@ def show_parrilla():
 
                 if medias:
                     st.markdown("**📌 Relevancia media**")
+                    # FIX 4: evitar DuplicateWidgetID si la misma fecha ya apareció en 'altas'
+                    altas_fechas = {sd['fecha'] for sd in altas}
                     for sd in medias:
+                        if sd['fecha'] in altas_fechas:
+                            continue
                         d_obj   = date.fromisoformat(sd['fecha'])
                         dia_lbl = f"{d_obj.day} {MESES_ES[mes][:3]} ({_DIA_LABEL[d_obj.weekday()]})"
                         tipo_b  = {"nacional": "🇲🇽", "internacional": "🌍", "sector": "🔒"}.get(sd.get('tipo',''), "📌")
@@ -3771,6 +3810,32 @@ def show_parrilla():
         col_save, col_dl, col_info = st.columns([1.5, 1.5, 3])
         with col_save:
             if not _is_visita and st.button("💾  Guardar cambios", use_container_width=True, key="btn_guardar_parrilla"):
+                # FIX 6: detectar si hay cambios en widgets de cards no aplicados al df
+                _card_dirty = False
+                for _pi2, _prow2 in edited_df.iterrows():
+                    _wt  = st.session_state.get(f"c_tema_{_pi2}")
+                    _wli = st.session_state.get(f"c_li_{_pi2}")
+                    _wfb = st.session_state.get(f"c_fb_{_pi2}")
+                    _wim = st.session_state.get(f"c_img_{_pi2}")
+                    _wht = st.session_state.get(f"c_ht_{_pi2}")
+                    _war = st.session_state.get(f"c_arte_{_pi2}")
+                    _wct = st.session_state.get(f"c_cta_{_pi2}")
+                    if (
+                        (_wt  is not None and str(_wt)  != str(_prow2.get('Tema', '') or '')) or
+                        (_wli is not None and str(_wli) != str(_prow2.get('Copy LinkedIn', '') or '')) or
+                        (_wfb is not None and str(_wfb) != str(_prow2.get('Copy Facebook / Instagram', '') or '')) or
+                        (_wim is not None and str(_wim) != str(_prow2.get('Texto en Imagen', '') or '')) or
+                        (_wht is not None and str(_wht) != str(_prow2.get('Hashtags', '') or '')) or
+                        (_war is not None and str(_war) != str(_prow2.get('Arte Sugerida', '') or '')) or
+                        (_wct is not None and str(_wct) != str(_prow2.get('CTA', '') or ''))
+                    ):
+                        _card_dirty = True
+                        break
+                if _card_dirty:
+                    st.warning(
+                        "⚠️ Hay ediciones en tarjetas que no se han aplicado. "
+                        "Presiona **💾 Actualizar este post** en cada tarjeta editada antes de guardar."
+                    )
                 try:
                     _save_df_to_db(edited_df, meta.get('marca', ''), año, mes)
                     # Sync DB to GitHub for persistence across Streamlit Cloud reboots
@@ -3900,6 +3965,19 @@ def show_parrilla():
                 try:
                     descripcion, new_posts = _call_adjustment(adj_prompt)
                     new_df = _posts_to_df(new_posts)
+                    # FIX 5: preservar Texto en Imagen y Slides que la IA puede omitir
+                    _curr_lookup = {
+                        (str(p.get('fecha', '')), p.get('tipo_dia', 'regular')): p
+                        for p in current_posts
+                    }
+                    for _idx, _row in new_df.iterrows():
+                        _key = (str(_row.get('Fecha', '')), _row.get('Tipo', 'regular'))
+                        _curr = _curr_lookup.get(_key, {})
+                        if not _row.get('Texto en Imagen') and _curr.get('copy_imagen'):
+                            new_df.at[_idx, 'Texto en Imagen'] = _curr['copy_imagen']
+                        _curr_slides = int(_curr.get('num_slides', 1) or 1)
+                        if int(_row.get('Slides', 1) or 1) <= 1 and _curr_slides > 1:
+                            new_df.at[_idx, 'Slides'] = _curr_slides
                     st.session_state['parrilla_df'] = new_df
                     historial.append({'pedido': pedido, 'cambios': descripcion or "Parrilla ajustada."})
                     st.session_state['parrilla_historial'] = historial

@@ -225,7 +225,7 @@ def _stream_quick_post(prompt):
 
 
 def show_post_quick():
-    _role = st.session_state.get('current_user', {}).get('role', 'viewer')
+    _role = st.session_state.get('current_user', {}).get('role', 'visita')
     if _role == 'visita':
         st.warning("No tienes permiso para usar este módulo.")
         return

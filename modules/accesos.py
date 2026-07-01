@@ -22,6 +22,11 @@ _ROLE_LABEL = {
 
 
 def show_accesos():
+    _user_role = st.session_state.get('current_user', {}).get('role', '')
+    if _user_role != 'admin':
+        st.error("⛔ Acceso restringido a administradores.")
+        return
+
     st.markdown("""
     <h2 style="color:#1e90ff;font-size:1.5rem;font-weight:700;margin-bottom:2px;">
       🔐 Accesos
@@ -64,7 +69,7 @@ def show_accesos():
         rcols[2].markdown(
             f"<div style='padding:10px 0 8px;font-family:monospace;"
             f"color:#1e90ff;font-size:.88rem;letter-spacing:.05em;'>"
-            f"{u['password']}</div>",
+            f"●●●●●●</div>",
             unsafe_allow_html=True,
         )
         rcols[3].markdown(
@@ -128,12 +133,15 @@ def show_accesos():
             if st.button("➕ Crear usuario", use_container_width=True,
                          key="pg_acc_add", type="primary"):
                 if new_un.strip() and new_nb.strip() and new_p.strip():
-                    add_usuario(new_un.strip(), new_p.strip(),
-                                new_nb.strip(), role=new_rl)
-                    from modules.parrilla import _github_sync_db
-                    _github_sync_db()
-                    st.success(f"✅ Usuario **{new_un}** creado con rol **{new_rl}**.")
-                    st.rerun()
+                    created = add_usuario(new_un.strip(), new_p.strip(),
+                                          new_nb.strip(), role=new_rl)
+                    if created:
+                        from modules.parrilla import _github_sync_db
+                        _github_sync_db()
+                        st.success(f"✅ Usuario **{new_un}** creado con rol **{new_rl}**.")
+                        st.rerun()
+                    else:
+                        st.error(f"El usuario **{new_un.strip()}** ya existe. Elige otro nombre.")
                 else:
                     st.warning("Completa todos los campos.")
 

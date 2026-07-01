@@ -144,10 +144,11 @@ def show_kpis():
                 cols[4].markdown(f"`{tipo}`")
 
                 if tipo == 'auto_4pct':
-                    cols[1].markdown(
-                        f"<span style='color:#5b8db8;font-size:.78rem;'>"
-                        f"Auto · {fmt_num(md['meta'])}</span>",
-                        unsafe_allow_html=True,
+                    nuevas_metas[key] = cols[1].number_input(
+                        f"meta_{key}", value=float(objetivos.get(key, 0) or 0),
+                        min_value=0.0, step=1.0, label_visibility="collapsed",
+                        key=f"meta_{key}_{red}_{año}_{mes}",
+                        help="Auto (4% imp.) — editable para corrección",
                     )
                 elif tipo in ('auto_50pct', 'manual_50pct'):
                     cols[1].markdown(

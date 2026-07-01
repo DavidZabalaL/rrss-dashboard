@@ -203,6 +203,11 @@ Responde en español. Sé directo, específico y orientado a resultados. Evita g
 # ── Vista principal ────────────────────────────────────────────────────────────
 
 def show_insights():
+    _role = st.session_state.get('current_user', {}).get('role', 'visita')
+    if _role == 'visita':
+        st.warning("⛔ Vista no disponible en modo lectura.")
+        return
+
     marca        = st.session_state.get('marca_activa', 'k1')
     marca_nombre = 'Kabat One' if marca == 'k1' else 'SYM'
     red  = st.session_state.get('f_red', 'LinkedIn')
@@ -314,6 +319,7 @@ def show_insights():
                 file_name=nombre,
                 mime="text/plain",
                 use_container_width=True,
+                key=f"dl_insights_{marca}_{red}_{año}_{mes}",
             )
         with col_prompt:
             with st.expander(f"Ver prompt enviado a {_prov_lbl}"):

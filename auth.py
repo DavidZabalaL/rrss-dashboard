@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import streamlit as st
+from database import _verify_password, update_password
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -128,7 +129,11 @@ def check_login():
 
         if submitted:
             users = _get_users()
-            if user in users and users[user]['password'] == pw:
+            if user in users and _verify_password(pw, users[user]['password']):
+                # Auto-upgrade: si la contraseña estaba en texto plano, migrarla a hash
+                stored = users[user]['password']
+                if not (':' in stored and len(stored) == 97):
+                    update_password(user, pw)
                 st.session_state.logged_in    = True
                 st.session_state.current_user = {
                     'nombre': users[user]['nombre'],
@@ -148,4 +153,8 @@ def get_user():
 def logout():
     st.session_state.pop('logged_in', None)
     st.session_state.pop('current_user', None)
+    for _k in ('parrilla_df', 'parrilla_meta', 'parrilla_historial', 'github_pulled'):
+        st.session_state.pop(_k, None)
+    for _k in [k for k in st.session_state if k.startswith('ai_analysis_')]:
+        del st.session_state[_k]
     st.rerun()

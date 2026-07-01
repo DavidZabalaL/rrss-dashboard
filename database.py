@@ -1,6 +1,8 @@
 # database.py — SQLite persistence
 
 import sqlite3
+import hashlib
+import os as _os
 import pandas as pd
 from pathlib import Path
 
@@ -15,16 +17,14 @@ def _conn():
 
 
 def init_db():
-    with _conn() as con:
-        con.executescript("""
-        CREATE TABLE IF NOT EXISTS usuarios (
+    _create_statements = [
+        """CREATE TABLE IF NOT EXISTS usuarios (
             username TEXT PRIMARY KEY,
             password TEXT NOT NULL,
             nombre   TEXT NOT NULL,
             role     TEXT NOT NULL DEFAULT 'viewer'
-        );
-
-        CREATE TABLE IF NOT EXISTS metricas_diarias (
+        )""",
+        """CREATE TABLE IF NOT EXISTS metricas_diarias (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             marca     TEXT NOT NULL,
             red       TEXT NOT NULL,
@@ -33,9 +33,8 @@ def init_db():
             valor     REAL NOT NULL DEFAULT 0,
             archivo   TEXT,
             UNIQUE(marca, red, metrica, fecha)
-        );
-
-        CREATE TABLE IF NOT EXISTS kpi_objetivos (
+        )""",
+        """CREATE TABLE IF NOT EXISTS kpi_objetivos (
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             marca   TEXT NOT NULL,
             red     TEXT NOT NULL,
@@ -44,9 +43,8 @@ def init_db():
             metrica TEXT NOT NULL,
             valor   REAL NOT NULL DEFAULT 0,
             UNIQUE(marca, red, año, mes, metrica)
-        );
-
-        CREATE TABLE IF NOT EXISTS kpi_manuales (
+        )""",
+        """CREATE TABLE IF NOT EXISTS kpi_manuales (
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             marca   TEXT NOT NULL,
             red     TEXT NOT NULL,
@@ -55,9 +53,8 @@ def init_db():
             metrica TEXT NOT NULL,
             valor   REAL NOT NULL DEFAULT 0,
             UNIQUE(marca, red, año, mes, metrica)
-        );
-
-        CREATE TABLE IF NOT EXISTS contenido_posts (
+        )""",
+        """CREATE TABLE IF NOT EXISTS contenido_posts (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
             marca             TEXT NOT NULL,
             red               TEXT NOT NULL,
@@ -75,9 +72,8 @@ def init_db():
             tasa_interaccion  REAL DEFAULT 0,
             archivo           TEXT,
             UNIQUE(marca, red, fecha, titulo)
-        );
-
-        CREATE TABLE IF NOT EXISTS parrilla_posts (
+        )""",
+        """CREATE TABLE IF NOT EXISTS parrilla_posts (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             marca           TEXT NOT NULL,
             año             INTEGER NOT NULL,
@@ -98,8 +94,11 @@ def init_db():
             num_slides      INTEGER DEFAULT 1,
             monday_item_id  TEXT,
             UNIQUE(marca, año, mes, fecha, tipo_dia)
-        );
-        """)
+        )""",
+    ]
+    with _conn() as con:
+        for stmt in _create_statements:
+            con.execute(stmt)
         for _migration in [
             "ALTER TABLE parrilla_posts ADD COLUMN copy_imagen TEXT",
             "ALTER TABLE parrilla_posts ADD COLUMN num_slides INTEGER DEFAULT 1",
@@ -282,6 +281,28 @@ def get_contenido_redes(marca):
     return [r['red'] for r in rows]
 
 
+# ── Password hashing (PBKDF2-SHA256, stdlib only) ─────────────────────────────
+
+def _hash_password(password: str) -> str:
+    """Devuelve 'salt_hex:key_hex' (32+1+64 = 97 chars)."""
+    salt = _os.urandom(16)
+    key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100_000)
+    return salt.hex() + ':' + key.hex()
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    """Verifica contraseña contra el hash almacenado.
+    Soporta formato hash (salt:key) y texto plano legacy."""
+    if ':' in stored and len(stored) == 97:  # formato hash: 32hex + ':' + 64hex
+        salt_hex, key_hex = stored.split(':', 1)
+        salt = bytes.fromhex(salt_hex)
+        key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100_000)
+        return key.hex() == key_hex
+    else:
+        # Contraseña en texto plano (legacy, migración en curso)
+        return password == stored
+
+
 # ── Usuarios ──────────────────────────────────────────────────────────────────
 
 _DEFAULT_USERS = [
@@ -290,18 +311,39 @@ _DEFAULT_USERS = [
 ]
 
 
+def migrate_passwords():
+    """Migra contraseñas en texto plano a formato PBKDF2-SHA256 (bulk migration)."""
+    with _conn() as con:
+        rows = con.execute("SELECT username, password FROM usuarios").fetchall()
+        for row in rows:
+            stored = row['password']
+            # Si no tiene el formato hash (salt:key de 97 chars), es texto plano
+            if not (':' in stored and len(stored) == 97):
+                hashed = _hash_password(stored)
+                con.execute(
+                    "UPDATE usuarios SET password=? WHERE username=?",
+                    (hashed, row['username']),
+                )
+
+
 def seed_usuarios():
     """Inserta usuarios por defecto solo si la tabla está vacía."""
     with _conn() as con:
         if con.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0] == 0:
+            hashed_users = [
+                (u, _hash_password(pw), n, r)
+                for (u, pw, n, r) in _DEFAULT_USERS
+            ]
             con.executemany(
                 "INSERT OR IGNORE INTO usuarios (username, password, nombre, role) VALUES (?,?,?,?)",
-                _DEFAULT_USERS,
+                hashed_users,
             )
         # Migración: Marketing debe tener role='uploader', no 'viewer'
         con.execute(
             "UPDATE usuarios SET role='uploader' WHERE username='Marketing' AND role='viewer'"
         )
+    # Migra contraseñas en texto plano que puedan existir de versiones anteriores
+    migrate_passwords()
 
 
 def get_usuarios():
@@ -323,18 +365,33 @@ def get_usuarios_lista():
     return [dict(r) for r in rows]
 
 
-def update_usuario_password(username, new_password):
+def update_password(username: str, new_password: str):
+    """Hashea new_password y lo guarda en DB. Usado por auth.py para auto-upgrade."""
+    hashed = _hash_password(new_password)
     with _conn() as con:
         con.execute("UPDATE usuarios SET password=? WHERE username=?",
-                    (new_password, username))
+                    (hashed, username))
 
 
-def add_usuario(username, password, nombre, role='viewer'):
+def update_usuario_password(username, new_password):
+    """Wrapper público — hashea y persiste la nueva contraseña."""
+    update_password(username, new_password)
+
+
+def add_usuario(username, password, nombre, role='viewer') -> bool:
+    """Crea un usuario nuevo. Retorna True si se creó, False si el username ya existía."""
     with _conn() as con:
+        existing = con.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE username=?", (username,)
+        ).fetchone()[0]
+        if existing:
+            return False
+        hashed = _hash_password(password)
         con.execute(
-            "INSERT OR REPLACE INTO usuarios (username, password, nombre, role) VALUES (?,?,?,?)",
-            (username, password, nombre, role),
+            "INSERT INTO usuarios (username, password, nombre, role) VALUES (?,?,?,?)",
+            (username, hashed, nombre, role),
         )
+    return True
 
 
 def delete_usuario(username):

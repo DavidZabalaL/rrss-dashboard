@@ -227,14 +227,19 @@ La tasa de interacción se calcula automáticamente: **(Reacciones + Comentarios
     # ══════════════════════════════════════════════════════════════════════════
     # 7. INSIGHTS CON IA
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander("7 · Insights con IA (análisis directo con Claude)"):
+    with st.expander("7 · Insights con IA (análisis directo con Gemini / Claude)"):
         st.markdown("""
-Genera un **análisis estratégico completo directamente con Claude**, sin necesidad de
+Genera un **análisis estratégico completo directamente con IA**, sin necesidad de
 copiar y pegar en ninguna herramienta externa.
+
+### Motor de IA
+
+El módulo usa **Gemini 2.5 Flash** por defecto — gratuito en el tier gratuito de Google AI Studio.
+También puedes usar **Claude** como alternativa configurable desde el selector **Motor IA** en el sidebar.
 
 ### ¿Qué analiza?
 
-Con los datos del mes seleccionado en los filtros, Claude entrega:
+Con los datos del mes seleccionado en los filtros, la IA entrega:
 
 1. **Diagnóstico de salud** — calificación Excelente / Bueno / Regular / Crítico con justificación
 2. **Análisis de contenido ganador vs. perdedor** — qué tienen en común los posts del Top 5 y qué falló en el Bottom 5
@@ -245,7 +250,7 @@ Con los datos del mes seleccionado en los filtros, Claude entrega:
 ### ¿Cómo usarlo?
 
 1. Selecciona **marca**, **red social** y **mes** en los filtros superiores
-2. Clic en **🤖 Analizar con Claude**
+2. Clic en **🤖 Analizar con Gemini** (o Claude si está configurado)
 3. El análisis aparece progresivamente en pantalla (~20-40 segundos)
 4. Puedes **descargar el análisis** como `.txt` para compartirlo
 
@@ -253,7 +258,7 @@ Con los datos del mes seleccionado en los filtros, Claude entrega:
 
 > ⭐ **El análisis de Insights se conecta directamente con la Parrilla.**
 > Si generas el análisis de LinkedIn, Facebook e Instagram del mes cerrado **antes** de
-> crear la parrilla del mes siguiente, Claude usará esas recomendaciones como base
+> crear la parrilla del mes siguiente, la IA usará esas recomendaciones como base
 > estratégica para decidir qué publicar, qué pilares priorizar y qué formatos usar.
 
 **Recomendación:** genera el análisis de las 3 redes antes de crear la parrilla mensual.
@@ -424,31 +429,37 @@ y tendencias de rendimiento — y toma decisiones editoriales basadas en datos r
 
 | Campo | Descripción |
 |---|---|
-| **Red social** | LinkedIn, Facebook, Instagram o Multi-red |
-| **Tema** | Sobre qué trata el post |
-| **Pilar** | Pillar de contenido (Posicionamiento, Educación, etc.) |
-| **Tono** | Formal / Conversacional / Inspiracional / Urgente |
-| **CTA** | Llamado a la acción deseado |
-| **Notas adicionales** | Contexto extra para la IA |
+| **Tipo de contenido** | Categoría del post: Tema libre, Noticia, Evento, Lanzamiento, Caso de éxito, Educativo/Técnico |
+| **Tema principal** | Describe el tema en una frase concisa |
+| **¿Para qué redes?** | LinkedIn, Facebook / Instagram, o ambos |
+| **Contexto adicional** | Pega aquí noticias, datos, comunicados o descripciones de producto (opcional) |
 
-3. Haz clic en **✨ Generar Post** — la IA crea el copy completo
-4. Revisa el resultado y edita si necesitas
-5. Haz clic en **📅 Agregar a Parrilla** para enviarlo a la parrilla del mes
+3. Haz clic en **✨ Generar Post con Gemini** (o Claude si está configurado) — la IA crea el copy completo
+4. Revisa y edita el resultado en los campos:
+   - Copy LinkedIn / Copy Facebook–Instagram
+   - Texto en Imagen (headline y subtítulo)
+   - Hashtags y CTA
+   - Arte Sugerida (descripción para el diseñador)
+5. Usa la sección **🎨 Imagen** para generar o editar el arte directamente con IA
+6. Expande **➕ Agregar a Parrilla del mes** para enviarlo a la parrilla
 
 ### Agregar a Parrilla
 
-Al hacer clic en **📅 Agregar a Parrilla**, aparece un formulario:
+Al expandir la sección **➕ Agregar a Parrilla del mes**, puedes revisar y editar:
 
 | Campo | Descripción |
 |---|---|
-| **Mes / Año** | A qué mes pertenece el post |
 | **Fecha** | Día exacto de publicación |
+| **Pilar** | Pilar de contenido de la marca |
 | **Formato** | Imagen estática, Carrusel, Video, etc. |
+| **Estado** | Borrador / En diseño / Aprobado / Publicado |
+| **Tema** | Título del post |
+| **Copy LinkedIn / Facebook** | Textos completos por red |
+| **Hashtags / CTA** | Tags y llamado a la acción |
+| **Texto en Imagen** | Headline y subtítulo para el arte |
 | **Arte Sugerida** | Descripción para el diseñador |
-| **✏️ Texto en Imagen** | Headline o texto que irá dentro del arte |
 
-El post se agrega directamente a la parrilla del mes y aparece de inmediato sin necesidad de
-hacer refresh. Se sincroniza automáticamente con la base de datos en GitHub.
+Haz clic en **✅ Guardar en Parrilla** para persistir el post. Se sincroniza automáticamente con la base de datos en GitHub.
         """)
 
     # ══════════════════════════════════════════════════════════════════════════

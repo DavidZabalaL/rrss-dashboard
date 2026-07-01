@@ -358,6 +358,9 @@ box-shadow:0 2px 16px rgba(0,0,0,.08);page-break-inside:avoid;">
 def _build_html_report(marca_key: str, año: int, mes: int,
                        brand: dict, data: dict, logo_b64: str) -> str:
 
+    import plotly.offline as _plotly_offline
+    plotly_js = _plotly_offline.get_plotlyjs()
+
     colors    = brand.get("colors", {})
     primary   = colors.get("primary",          "#1e90ff")
     secondary = colors.get("secondary",         "#24326A")
@@ -369,10 +372,9 @@ def _build_html_report(marca_key: str, año: int, mes: int,
     fecha_gen = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     css = f"""
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{
-    font-family: 'Inter', Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     background: #e8edf4;
     color: #1a2d42;
     -webkit-print-color-adjust: exact;
@@ -453,6 +455,8 @@ body {{
 .estado-borrador   {{ background:#f0f0f0;color:#666; }}
 .estado-cancelado  {{ background:#fdecea;color:#c0392b; }}
 .estado-revision   {{ background:#fff3cd;color:#856404; }}
+.estado-en_diseno  {{ background:#fff0d6;color:#b45309; }}
+.estado-aprobado   {{ background:#dbeafe;color:#1d4ed8; }}
 
 .report-footer {{ background:{dark_bg};padding:28px 40px;
     display:flex;align-items:center;justify-content:space-between;gap:20px; }}
@@ -506,6 +510,8 @@ body {{
                         "estado-programado" if "programad" in ec else
                         "estado-cancelado"  if "cancelad" in ec else
                         "estado-revision"   if "revision" in ec or "revisión" in ec else
+                        "estado-en_diseno"  if "dise" in ec else
+                        "estado-aprobado"   if "aprobad" in ec else
                         "estado-borrador")
             rows_html += f"""<tr>
   <td>{post.get('fecha','')}</td>
@@ -539,7 +545,7 @@ body {{
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reporte RRSS — {label} — {mes_label} {año}</title>
-  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script>{plotly_js}</script>
   <style>{css}</style>
 </head>
 <body>
